@@ -1,6 +1,7 @@
 import { Html } from "@react-three/drei";
 import { staticOffice, svgToWorld, type PlacedZone } from "@/data/layout-office";
 import type { ThemeMode } from "@/gateway/types";
+import { useOfficeStore } from "@/store/office-store";
 import {
   BookShelf,
   Chair,
@@ -16,7 +17,7 @@ import {
   Sofa,
 } from "./furniture";
 import { Block } from "./furniture";
-import { boundaryToward, commandCenter, standPoint, walkSegments } from "./walkways";
+import { boundaryToward, commandCenter, occupiedFloor, standPoint, walkSegments } from "./walkways";
 
 const RUG: Record<string, string> = {
   research: "#CDE8F2",
@@ -43,9 +44,10 @@ function worldLen(px: number): number {
 
 export function GrokRoom3D({ theme }: { theme: ThemeMode }) {
   const dark = theme === "dark";
-  const [floorX, , floorZ] = at(layout.width / 2, layout.height / 2);
-  const floorW = 18.6;
-  const floorD = (layout.height / layout.width) * 18 + 1.2;
+  const floor = occupiedFloor();
+  const floorX = floor.centerX;
+  const floorZ = floor.centerZ;
+  const { floorW, floorD, minWX, minWZ } = floor;
   const wall = dark ? "#2a2826" : "#F4F1EC";
 
   return (
@@ -72,30 +74,41 @@ export function GrokRoom3D({ theme }: { theme: ThemeMode }) {
         <planeGeometry args={[floorW, floorD]} />
         <meshLambertMaterial color={dark ? "#3a342c" : "#E8D9C4"} />
       </mesh>
-      <mesh position={[floorX, 0.04, floorZ - floorD / 2]} receiveShadow>
+      <mesh position={[floorX, 0.04, minWZ]} receiveShadow>
         <boxGeometry args={[floorW, 0.08, 0.08]} />
         <meshLambertMaterial color="#CDBBA2" />
       </mesh>
 
-      <mesh position={[floorX, 1.25, 0.06]} castShadow receiveShadow>
+      <mesh position={[floorX, 1.25, minWZ]} castShadow receiveShadow>
         <boxGeometry args={[floorW, 2.5, 0.12]} />
         <meshLambertMaterial color={wall} />
       </mesh>
-      <mesh position={[0.04, 1.25, floorZ]} castShadow receiveShadow>
+      <mesh position={[minWX, 1.25, floorZ]} castShadow receiveShadow>
         <boxGeometry args={[0.12, 2.5, floorD]} />
         <meshLambertMaterial color={wall} />
       </mesh>
       {Array.from({ length: 5 }).map((_, index) => (
-        <mesh key={index} position={[1.8 + index * 3.2, 1.65, 0.14]}>
-          <planeGeometry args={[2.0, 1.05]} />
+        <mesh key={index} position={[minWX + floorW * ((index + 1) / 6), 1.65, minWZ + 0.08]}>
+          <planeGeometry args={[Math.min(2.0, floorW / 7), 1.05]} />
           <meshLambertMaterial color="#D7E8F5" emissive="#FFE2B8" emissiveIntensity={0.18} />
         </mesh>
       ))}
-      <Html position={[floorW * 0.55, 2.15, 0.2]} center style={{ pointerEvents: "none" }}>
+      <group position={[floorX + floorW * 0.12, 1.72, minWZ + 0.1]}>
+        <mesh>
+          <circleGeometry args={[0.16, 16]} />
+          <meshLambertMaterial color="#F4F1EC" />
+        </mesh>
+        <mesh position={[0.03, 0.04, 0.01]}>
+          <boxGeometry args={[0.07, 0.018, 0.01]} />
+          <meshLambertMaterial color="#4A4F57" />
+        </mesh>
+        <mesh position={[0, 0.045, 0.012]}>
+          <boxGeometry args={[0.018, 0.09, 0.01]} />
+          <meshLambertMaterial color="#4A4F57" />
+        </mesh>
+      </group>
+      <Html position={[floorX, 2.15, minWZ + 0.16]} center style={{ pointerEvents: "none" }}>
         <div style={{ fontWeight: 800, letterSpacing: "0.22em", fontSize: 18, color: "#0369a1" }}>{layout.title}</div>
-      </Html>
-      <Html position={[floorW * 0.22, 1.7, 0.2]} center style={{ pointerEvents: "none" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#6b6258" }}>09:41</div>
       </Html>
 
       {walkSegments().map((segment, index) => (
@@ -130,7 +143,11 @@ function ZoneRoom({ zone }: { zone: PlacedZone }) {
   const [cx, , cz] = svgToWorld({ x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 });
   const w = worldLen(zone.width - 10);
   const d = (zone.height / layout.width) * 18;
-  const sign = at(zone.x + 36, zone.y + 22, 0.46);
+  const speaking = useOfficeStore((state) => Array.from(state.agents.values()).some((agent) => agent.speechBubble));
+  const sign =
+    zone.id === "slides"
+      ? at(zone.x + zone.width * 0.78, zone.y + zone.height - 26, 0.06)
+      : at(zone.x + 28, zone.y + 14, 0.58);
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0.012, cz]} receiveShadow>
@@ -138,24 +155,36 @@ function ZoneRoom({ zone }: { zone: PlacedZone }) {
         <meshLambertMaterial color={rug} />
       </mesh>
       <ZoneWalls zone={zone} />
-      <Html position={sign} center style={{ pointerEvents: "none" }}>
-        <div
-          style={{
-            background: rug,
-            color: "#3f3a34",
-            fontSize: 11,
-            fontWeight: 800,
-            padding: "2px 6px",
-            borderRadius: 4,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {zone.name}
-        </div>
-      </Html>
+      <ZoneSign text={zone.name} position={sign} hidden={speaking} align={zone.id === "slides" ? "center" : "end"} />
       <ZoneKit zone={zone} />
-      <Plant position={at(zone.x + zone.width - 28, zone.y + 30)} scale={zone.id === "slides" ? 1.35 : 1} />
+      <Plant
+        position={at(zone.x + zone.width - 28, zone.id === "slides" ? zone.y + zone.height - 28 : zone.y + 30)}
+        scale={zone.id === "slides" ? 1.2 : 1}
+      />
     </group>
+  );
+}
+
+function ZoneSign({
+  text,
+  position,
+  hidden,
+  align,
+}: {
+  text: string;
+  position: [number, number, number];
+  hidden: boolean;
+  align: "center" | "end";
+}) {
+  return (
+    <Html position={position} center zIndexRange={[3, 0]} style={{ pointerEvents: "none" }}>
+      <div
+        className="pointer-events-none whitespace-nowrap rounded bg-white/80 px-1 py-px text-[9px] font-medium tracking-wide text-slate-500"
+        style={{ opacity: hidden ? 0 : 1, transform: align === "end" ? "translateX(-42%)" : undefined }}
+      >
+        {text}
+      </div>
+    </Html>
   );
 }
 
@@ -406,9 +435,10 @@ function Globe({ position }: { position: [number, number, number] }) {
 }
 
 function Lounge() {
-  const amenity = layout.amenity;
-  const sofa = at(amenity.x + 120, amenity.y + amenity.height * 0.62);
-  const bar = at(amenity.x + amenity.width - 180, amenity.y + amenity.height * 0.55);
+  const floor = occupiedFloor();
+  const frontY = floor.svg.maxZoneY + 62;
+  const sofa = at(floor.svg.x + 150, frontY);
+  const bar = at(floor.svg.x + floor.svg.width - 170, frontY);
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[sofa[0], 0.015, sofa[2]]} receiveShadow>

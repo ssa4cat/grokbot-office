@@ -1,4 +1,4 @@
-import { staticOffice, type PlacedZone } from "@/data/layout-office";
+import { staticOffice, svgToWorld, type PlacedZone } from "@/data/layout-office";
 
 export interface Pt {
   x: number;
@@ -12,6 +12,50 @@ export interface WalkSegment {
 }
 
 const layout = staticOffice.layout;
+
+/** Floor that hugs the rooms plus a short lounge, not the empty SVG header or a deep front strip. */
+export function occupiedFloor() {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const zone of layout.zones) {
+    minX = Math.min(minX, zone.x);
+    minY = Math.min(minY, zone.y);
+    maxX = Math.max(maxX, zone.x + zone.width);
+    maxY = Math.max(maxY, zone.y + zone.height);
+  }
+  const padX = 40;
+  const padBack = 28;
+  const lounge = 108;
+  const x = minX - padX;
+  const y = minY - padBack;
+  const width = maxX - minX + padX * 2;
+  const height = maxY - y + lounge;
+  const corners = [
+    svgToWorld({ x, y }),
+    svgToWorld({ x: x + width, y }),
+    svgToWorld({ x, y: y + height }),
+    svgToWorld({ x: x + width, y: y + height }),
+  ];
+  const xs = corners.map((corner) => corner[0]);
+  const zs = corners.map((corner) => corner[2]);
+  const minWX = Math.min(...xs);
+  const maxWX = Math.max(...xs);
+  const minWZ = Math.min(...zs);
+  const maxWZ = Math.max(...zs);
+  return {
+    svg: { x, y, width, height, maxZoneY: maxY },
+    minWX,
+    maxWX,
+    minWZ,
+    maxWZ,
+    floorW: maxWX - minWX,
+    floorD: maxWZ - minWZ,
+    centerX: (minWX + maxWX) / 2,
+    centerZ: (minWZ + maxWZ) / 2,
+  };
+}
 
 function zoneCenter(zone: PlacedZone): Pt {
   return { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };

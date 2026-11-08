@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
-import { handoffPoints } from "./walkways";
+import { handoffPoints, occupiedFloor } from "./walkways";
 import { useOfficeStore } from "@/store/office-store";
 import { AgentCharacter } from "./AgentCharacter";
 import { GrokRoom3D } from "./GrokRoom3D";
@@ -112,10 +112,8 @@ function CollabLines() {
 }
 
 function floorFrame() {
-  const [floorX, , floorZ] = svgToWorld({ x: staticOffice.layout.width / 2, y: staticOffice.layout.height / 2 });
-  const floorW = 18.6;
-  const floorD = (staticOffice.layout.height / staticOffice.layout.width) * 18 + 1.2;
-  return { floorX, floorZ, floorW, floorD };
+  const floor = occupiedFloor();
+  return { floorX: floor.centerX, floorZ: floor.centerZ, floorW: floor.floorW, floorD: floor.floorD };
 }
 
 function FitCamera() {
@@ -128,7 +126,7 @@ function FitCamera() {
     if (!persp.isPerspectiveCamera) return;
     const center = new THREE.Vector3(floorX, 0.55, floorZ);
     const corners: THREE.Vector3[] = [];
-    for (const y of [0, 1.9]) {
+    for (const y of [0, 1.35]) {
       for (const x of [floorX - floorW / 2, floorX + floorW / 2]) {
         for (const z of [floorZ - floorD / 2, floorZ + floorD / 2]) {
           corners.push(new THREE.Vector3(x, y, z));

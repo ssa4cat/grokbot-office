@@ -2,7 +2,6 @@ import { Html } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef, useState } from "react";
 import { Vector3, type Group } from "three";
-import { useTranslation } from "react-i18next";
 import { getProfile, svgToWorld, type Accessory } from "@/data/layout-office";
 import type { VisualAgent } from "@/gateway/types";
 import { useOfficeStore } from "@/store/office-store";
@@ -39,13 +38,14 @@ function SpeechBubble({ text }: { text: string }) {
 
   return (
     <group ref={anchor}>
-      <Html position={[0, below ? 0.15 : 1.62, 0]} center zIndexRange={[40, 0]} style={{ pointerEvents: "none" }}>
+      <Html position={[0, below ? 0.05 : 1.85, 0]} center zIndexRange={[200, 0]} style={{ pointerEvents: "none", zIndex: 30 }}>
         <div
-          className="pointer-events-none rounded-2xl bg-white px-2.5 py-1.5 text-left text-[12px] leading-snug text-slate-700 shadow"
+          className="pointer-events-none rounded-2xl border border-slate-200 px-2.5 py-1.5 text-left text-[12px] leading-snug text-slate-800 shadow-md"
           style={{
             width: 168,
             minWidth: 120,
             maxWidth: 200,
+            background: "#ffffff",
             whiteSpace: "normal",
             writingMode: "horizontal-tb",
             wordBreak: "break-word",
@@ -62,7 +62,6 @@ function SpeechBubble({ text }: { text: string }) {
 const MODEL_SCALE = 1.15;
 
 export function AgentCharacter({ agent }: AgentCharacterProps) {
-  const { t } = useTranslation("common");
   const groupRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
@@ -73,6 +72,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
   const accessory = profile?.accessory ?? null;
   const isSelected = selectedAgentId === agent.id;
   const [targetX, , targetZ] = svgToWorld(agent.position);
+  const fadeLabel = useOfficeStore((state) => Array.from(state.agents.values()).some((other) => other.speechBubble));
 
   useFrame((state, delta) => {
     if (!groupRef.current || !bodyRef.current) return;
@@ -165,13 +165,12 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       )}
 
       {agent.speechBubble && <SpeechBubble text={agent.speechBubble.text} />}
-      <Html position={[0, 1.28, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+      <Html position={[0.5, 0.4, 0]} center zIndexRange={[8, 0]} style={{ pointerEvents: "none" }}>
         <div
           className="pointer-events-none whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-center text-[11px] font-semibold text-slate-700 shadow transition-opacity"
-          style={{ opacity: agent.speechBubble ? 0 : 1 }}
+          style={{ opacity: fadeLabel ? 0 : 1 }}
         >
           {agent.name}
-          <span className="ml-1 font-normal text-slate-400">{t(`agent.statusLabels.${agent.status}`)}</span>
         </div>
       </Html>
     </group>
