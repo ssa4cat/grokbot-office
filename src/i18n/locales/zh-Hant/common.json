@@ -1,0 +1,24 @@
+{
+  "status": {
+    "connecting": "連線中…",
+    "connected": "已連線",
+    "reconnecting": "重新連線",
+    "disconnected": "未連線",
+    "error": "連線錯誤",
+    "static": "靜態展示"
+  },
+  "empty": {
+    "noMatchingAgents": "沒有符合的機器人"
+  },
+  "agent": {
+    "statusLabels": {
+      "idle": "待命",
+      "thinking": "思考中",
+      "tool_calling": "使用工具",
+      "speaking": "回覆中",
+      "spawning": "啟動中",
+      "error": "異常",
+      "offline": "離線"
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "office": {
+    "title": "GROK BOT",
+    "subtitle": "Grok Bot 工作室",
+    "columns": 4
+  },
+  "zones": [
+    {
+      "id": "research",
+      "name": "資料室",
+      "summary": "蒐集背景資料與來源連結",
+      "accent": "#38bdf8",
+      "furnishing": "research",
+      "col": 0,
+      "row": 0
+    },
+    {
+      "id": "writing",
+      "name": "寫作區",
+      "summary": "撰寫完整的部落格與專欄初稿",
+      "accent": "#818cf8",
+      "furnishing": "writing",
+      "col": 1,
+      "row": 0
+    },
+    {
+      "id": "editing",
+      "name": "編輯台",
+      "summary": "檢查錯字、文法與邏輯",
+      "accent": "#f59e0b",
+      "furnishing": "editing",
+      "col": 2,
+      "row": 0
+    },
+    {
+      "id": "studio",
+      "name": "畫室",
+      "summary": "每篇文章畫一張、風格多變",
+      "accent": "#f472b6",
+      "furnishing": "studio",
+      "col": 3,
+      "row": 0
+    },
+    {
+      "id": "review",
+      "name": "審圖室",
+      "summary": "審核插圖，不合格就退回重畫",
+      "accent": "#a78bfa",
+      "furnishing": "review",
+      "col": 0,
+      "row": 1
+    },
+    {
+      "id": "command",
+      "name": "中央指揮台",
+      "summary": "拆解目標、分派、品管、交付",
+      "accent": "#22d3ee",
+      "furnishing": "command",
+      "col": 1,
+      "row": 1
+    },
+    {
+      "id": "workstation",
+      "name": "多功能工作站",
+      "summary": "通用助理的專屬電腦",
+      "accent": "#34d399",
+      "furnishing": "workstation",
+      "col": 2,
+      "row": 1
+    },
+    {
+      "id": "lab",
+      "name": "Bot 實驗室",
+      "summary": "團隊擴編時設計新的機器人",
+      "accent": "#fb7185",
+      "furnishing": "lab",
+      "col": 3,
+      "row": 1
+    }
+  ],
+  "agents": [
+    {
+      "id": "researcher",
+      "name": "資料蒐集員",
+      "role": "研究員",
+      "zone": "research",
+      "status": "idle",
+      "accent": "#0ea5e9",
+      "accessory": "headset",
+      "summary": "蒐集文章需要的背景資料，整理來源與連結，交給筆桿。"
+    },
+    {
+      "id": "writer",
+      "name": "筆桿",
+      "role": "寫手",
+      "zone": "writing",
+      "status": "idle",
+      "accent": "#6366f1",
+      "accessory": "pencil",
+      "summary": "依資料寫出完整的部落格或專欄初稿。總編退稿時負責修改。"
+    },
+    {
+      "id": "editor",
+      "name": "總編",
+      "role": "編輯",
+      "zone": "editing",
+      "status": "idle",
+      "accent": "#d97706",
+      "accessory": "glasses",
+      "summary": "檢查錯字、文法與邏輯。不合格就退回筆桿，通過後送去畫室。"
+    },
+    {
+      "id": "illustrator",
+      "name": "畫師",
+      "role": "插畫",
+      "zone": "studio",
+      "status": "idle",
+      "accent": "#db2777",
+      "accessory": "beret",
+      "summary": "為每一篇文章畫一張插圖，風格每次都可以不一樣。被退件就重畫。"
+    },
+    {
+      "id": "artdirector",
+      "name": "藝術總監",
+      "role": "美術審核",
+      "zone": "review",
+      "status": "idle",
+      "accent": "#7c3aed",
+      "accessory": "cap",
+      "summary": "審核插圖。不通過就退回畫師重畫，通過後交給幕僚長整合。"
+    },
+    {
+      "id": "chief",
+      "name": "幕僚長",
+      "role": "總協調",
+      "zone": "command",
+      "status": "idle",
+      "accent": "#fb923c",
+      "accessory": "cape",
+      "summary": "把目標拆成可執行的工作，分派給各專職機器人，做品質檢查，再交付整合後的成果。"
+    },
+    {
+      "id": "lumi",
+      "name": "Lumi",
+      "role": "通用助理",
+      "zone": "workstation",
+      "status": "idle",
+      "accent": "#10b981",
+      "accessory": "badge",
+      "summary": "通用助理，有自己的電腦，處理不屬於單一內容產線的雜事。"
+    },
+    {
+      "id": "eggbot",
+      "name": "dr eggbot",
+      "role": "機器人設計師",
+      "zone": "lab",
+      "status": "idle",
+      "accent": "#fb7185",
+      "accessory": "goggles",
+      "summary": "團隊要擴編時才登場，負責設計新的機器人。平常待在 Bot 實驗室。"
+    }
+  ],
+  "links": [
+    { "from": "researcher", "to": "writer", "kind": "flow", "label": "素材" },
+    { "from": "writer", "to": "editor", "kind": "flow", "label": "初稿" },
+    { "from": "editor", "to": "writer", "kind": "return", "label": "退稿" },
+    { "from": "editor", "to": "illustrator", "kind": "flow", "label": "定稿" },
+    { "from": "illustrator", "to": "artdirector", "kind": "flow", "label": "插圖" },
+    { "from": "artdirector", "to": "illustrator", "kind": "return", "label": "重畫" },
+    { "from": "artdirector", "to": "chief", "kind": "flow", "label": "交付" }
+  ]
+}

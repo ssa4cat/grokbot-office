@@ -1,0 +1,38 @@
+{
+  "topbar": {
+    "brand": "Grok Bot 工作室",
+    "teamCount": "{{count}} 位機器人",
+    "viewMode": {
+      "switchTo": "切換到 {{mode}}",
+      "webglNotSupported": "這個瀏覽器不支援 3D"
+    },
+    "theme": {
+      "switchToDark": "切換深色",
+      "switchToLight": "切換淺色"
+    }
+  },
+  "sidebar": {
+    "agents": "團隊",
+    "pipeline": "內容產線",
+    "flow": "送件",
+    "return": "退回",
+    "agentDetail": "機器人",
+    "searchPlaceholder": "搜尋機器人…",
+    "zone": "區域",
+    "role": "職責",
+    "summary": "職責",
+    "links": "協作",
+    "expand": "展開側欄",
+    "collapse": "收合側欄",
+    "closeSidebar": "關閉側欄",
+    "expandSidebar": "展開側欄",
+    "collapseSidebar": "收合側欄",
+    "staticHint": "點場景裡的機器人看職責。狀態目前寫在設定檔。",
+    "filters": {
+      "all": "全部",
+      "active": "工作中",
+      "idle": "待命",
+      "error": "異常"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# 尚未啟用、也不會自動發布。
+# 只有在 GitHub 上手動按「Run workflow」時才會建置，產物留在 Actions artifact。
+# 沒有部署到 GitHub Pages 或其他主機的步驟。
+name: Build static site
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_BASE: /grokbot-office/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
