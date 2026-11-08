@@ -19,7 +19,7 @@ export function occupiedFloor() {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const zone of layout.zones) {
+  for (const zone of [...layout.zones, ...layout.reserved]) {
     minX = Math.min(minX, zone.x);
     minY = Math.min(minY, zone.y);
     maxX = Math.max(maxX, zone.x + zone.width);
@@ -90,12 +90,11 @@ export function commandCenter(): Pt {
   return zoneCenter(zone);
 }
 
-/** Desk-side standing spot: in front of the desk, toward the camera (larger y). */
+/** Where this zone's robot sits. Walks leave from here and come back. */
 export function standPoint(zone: PlacedZone): Pt {
-  if (zone.id === "slides") {
-    return { x: zone.x + zone.width * 0.32, y: zone.y + zone.height * 0.34 };
-  }
-  return { x: zone.x + zone.width / 2, y: zone.y + zone.height * 0.74 };
+  const seat = layout.seats.find((item) => item.zoneId === zone.id);
+  if (seat) return { x: seat.x, y: seat.y };
+  return { x: zone.x + zone.width / 2, y: zone.y + zone.height * 0.7 };
 }
 
 export function ringPoints(): Pt[] {

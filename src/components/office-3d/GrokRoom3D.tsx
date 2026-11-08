@@ -1,5 +1,5 @@
 import { Html } from "@react-three/drei";
-import { staticOffice, svgToWorld, type PlacedZone } from "@/data/layout-office";
+import { staticOffice, stationsFor, svgToWorld, type PlacedZone } from "@/data/layout-office";
 import type { ThemeMode } from "@/gateway/types";
 import { useOfficeStore } from "@/store/office-store";
 import {
@@ -17,7 +17,7 @@ import {
   Sofa,
 } from "./furniture";
 import { Block } from "./furniture";
-import { boundaryToward, commandCenter, occupiedFloor, standPoint, walkSegments } from "./walkways";
+import { boundaryToward, commandCenter, occupiedFloor, walkSegments } from "./walkways";
 
 const RUG: Record<string, string> = {
   research: "#CDE8F2",
@@ -118,6 +118,7 @@ export function GrokRoom3D({ theme }: { theme: ThemeMode }) {
       {layout.zones.map((zone) => (
         <ZoneRoom key={zone.id} zone={zone} />
       ))}
+      <ReservedPods />
       <Lounge />
     </group>
   );
@@ -157,6 +158,8 @@ function ZoneRoom({ zone }: { zone: PlacedZone }) {
       <ZoneWalls zone={zone} />
       <ZoneSign text={zone.name} position={sign} hidden={speaking} align={zone.id === "slides" ? "center" : "end"} />
       <ZoneKit zone={zone} />
+      <SeatChairs zone={zone} />
+      <ExtraDesks zone={zone} />
       <Plant
         position={at(zone.x + zone.width - 28, zone.id === "slides" ? zone.y + zone.height - 28 : zone.y + 30)}
         scale={zone.id === "slides" ? 1.2 : 1}
@@ -239,19 +242,47 @@ function ZoneWalls({ zone }: { zone: PlacedZone }) {
   );
 }
 
+function SeatChairs({ zone }: { zone: PlacedZone }) {
+  const seats = staticOffice.layout.seats.filter((seat) => seat.zoneId === zone.id);
+  return (
+    <group>
+      {seats.map((seat) => (
+        <Chair key={seat.agentId} position={at(seat.x, seat.y - 20)} />
+      ))}
+    </group>
+  );
+}
+
+function ExtraDesks({ zone }: { zone: PlacedZone }) {
+  const count = staticOffice.layout.seats.filter((seat) => seat.zoneId === zone.id).length;
+  const extra = stationsFor(zone, count).slice(1);
+  return (
+    <group>
+      {extra.map((spot) => (
+        <group key={`${spot.desk.x}-${spot.desk.y}`}>
+          <Desk position={at(spot.desk.x, spot.desk.y)} />
+          <Monitor position={at(spot.desk.x, spot.desk.y - 6, 0.75)} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function ZoneKit({ zone }: { zone: PlacedZone }) {
-  const midX = zone.x + zone.width / 2;
-  const deskY = zone.y + zone.height * 0.4;
+  const count = Math.max(1, staticOffice.layout.seats.filter((seat) => seat.zoneId === zone.id).length);
+  const primary = stationsFor(zone, count)[0];
+  const midX = primary.desk.x;
+  const deskY = primary.desk.y;
   const backY = zone.y + 34;
   if (zone.id === "slides") return <SlidesRoom zone={zone} />;
   if (zone.id === "command") return <CommandRoom zone={zone} />;
   if (zone.id === "research") {
     return (
       <group>
-        <Desk position={at(midX - 28, deskY)} />
-        <Desk position={at(midX + 36, deskY)} size={[0.7, 0.08, 0.55]} />
-        <Monitor position={at(midX - 36, deskY - 8, 0.75)} />
-        <Monitor position={at(midX - 8, deskY - 8, 0.75)} />
+        <Desk position={at(midX, deskY)} />
+        <Desk position={at(midX + 78, deskY)} size={[0.7, 0.08, 0.55]} />
+        <Monitor position={at(midX - 12, deskY - 8, 0.75)} />
+        <Monitor position={at(midX + 16, deskY - 8, 0.75)} />
         <FilingCabinet position={at(zone.x + 36, backY)} />
         <FilingCabinet position={at(zone.x + 78, backY)} />
         <FilingCabinet position={at(zone.x + 120, backY)} />
@@ -291,6 +322,8 @@ function ZoneKit({ zone }: { zone: PlacedZone }) {
   if (zone.id === "studio") {
     return (
       <group>
+        <Desk position={at(midX, deskY)} size={[0.95, 0.08, 0.55]} />
+        <Monitor position={at(midX, deskY - 6, 0.75)} />
         <Easel position={at(midX - 10, backY + 16)} />
         <mesh position={at(midX + 36, deskY, 0.8)} rotation={[-Math.PI / 2, 0, 0.4]}>
           <cylinderGeometry args={[0.12, 0.12, 0.03, 10]} />
@@ -324,8 +357,6 @@ function ZoneKit({ zone }: { zone: PlacedZone }) {
       <group>
         <Desk position={at(midX, deskY)} size={[1.5, 0.08, 0.62]} />
         <Monitor position={at(midX - 16, deskY - 4, 0.75)} />
-        <Chair position={at(midX - 36, deskY + 28)} rotation={Math.PI} />
-        <Chair position={at(midX + 36, deskY + 28)} rotation={Math.PI} />
         <Block position={at(zone.x + zone.width - 30, backY, 0.28)} size={[0.22, 0.5, 0.28]} color="#2E3138" />
         <mesh position={at(zone.x + zone.width - 30, backY + 2, 0.55)}>
           <boxGeometry args={[0.04, 0.28, 0.02]} />
@@ -337,7 +368,7 @@ function ZoneKit({ zone }: { zone: PlacedZone }) {
   if (zone.id === "lab") {
     return (
       <group>
-        <Desk position={at(midX - 16, deskY)} size={[1.2, 0.08, 0.6]} />
+        <Desk position={at(midX, deskY)} size={[1.2, 0.08, 0.6]} />
         <RobotArm position={at(zone.x + zone.width - 52, backY)} />
         <Block position={at(zone.x + 32, backY, 0.4)} size={[0.4, 0.7, 0.22]} color="#F4F1EC" />
         <mesh position={at(midX + 10, deskY, 0.86)}>
@@ -360,8 +391,8 @@ function ZoneKit({ zone }: { zone: PlacedZone }) {
 }
 
 function CommandRoom({ zone }: { zone: PlacedZone }) {
-  const spot = standPoint(zone);
-  const hub = at(zone.x + zone.width / 2, zone.y + zone.height * 0.46);
+  const spot = stationsFor(zone, 1)[0];
+  const hub = at(spot.desk.x, spot.desk.y);
   return (
     <group>
       <mesh position={[hub[0], 0.02, hub[2]]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -378,11 +409,11 @@ function CommandRoom({ zone }: { zone: PlacedZone }) {
           </mesh>
         </group>
       ))}
-      <mesh position={at(spot.x + 28, spot.y - 10, 0.35)}>
+      <mesh position={at(spot.seat.x + 28, spot.seat.y - 10, 0.35)}>
         <cylinderGeometry args={[0.015, 0.015, 0.4, 6]} />
         <meshLambertMaterial color="#4A4F57" />
       </mesh>
-      <mesh position={at(spot.x + 28, spot.y - 10, 0.56)}>
+      <mesh position={at(spot.seat.x + 28, spot.seat.y - 10, 0.56)}>
         <boxGeometry args={[0.16, 0.1, 0.02]} />
         <meshLambertMaterial color="#CFEFEA" />
       </mesh>
@@ -392,12 +423,14 @@ function CommandRoom({ zone }: { zone: PlacedZone }) {
 
 function SlidesRoom({ zone }: { zone: PlacedZone }) {
   const anchor = at(zone.x + zone.width * 0.5, zone.y + 30);
+  const podium = stationsFor(zone, 1)[0];
   const screen: [number, number, number] = [anchor[0], 1 + 0.85, anchor[2]];
   const bars = [
     { h: 0.7, color: "#8B5CF6" },
     { h: 1.15, color: "#A78BFA" },
     { h: 0.85, color: "#C4B5FD" },
   ];
+  const backZ = anchor[2] - 0.28;
   return (
     <group>
       <mesh position={screen} castShadow>
@@ -415,6 +448,153 @@ function SlidesRoom({ zone }: { zone: PlacedZone }) {
           <Chair key={`${dz}-${dx}`} position={[screen[0] + dx, 0, screen[2] + dz]} />
         )),
       )}
+      <Lectern position={at(podium.desk.x, podium.desk.y)} />
+      <ProjectorCart position={[screen[0] + 2.85, 0, screen[2] + 0.78]} />
+      <SlidePinboard position={[screen[0] + 3.3, 0.42, backZ]} />
+      <Flipchart position={[screen[0] + 5.55, 0, backZ + 0.16]} />
+      <Plant position={[screen[0] + 5.15, 0, backZ + 0.48]} scale={0.9} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[screen[0] + 4.7, 0.02, screen[2] + 1.08]} receiveShadow>
+        <planeGeometry args={[3.4, 1.25]} />
+        <meshLambertMaterial color="#F6E4D2" />
+      </mesh>
+      <RehearsalTable position={[screen[0] + 4.3, 0, screen[2] + 1.0]} />
+      <LoungeSeat position={[screen[0] + 6.3, 0, screen[2] + 1.24]} rotation={-Math.PI / 2} />
+      <SideTable position={[screen[0] + 6.85, 0, screen[2] + 1.39]} />
+      <LoungeSeat position={[screen[0] + 7.35, 0, screen[2] + 1.64]} rotation={Math.PI / 2} />
+      <Plant position={[screen[0] + 7.7, 0, screen[2] + 0.89]} scale={1.05} />
+    </group>
+  );
+}
+
+function Lectern({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <Block position={[0, 0.48, 0]} size={[0.42, 0.9, 0.36]} color="#C89F74" />
+      <mesh position={[0, 0.96, 0.04]} rotation={[-0.35, 0, 0]} castShadow>
+        <boxGeometry args={[0.4, 0.06, 0.28]} />
+        <meshLambertMaterial color="#E7D3B5" />
+      </mesh>
+      <mesh position={[0, 0.99, 0.05]} rotation={[-0.35, 0, 0]}>
+        <boxGeometry args={[0.22, 0.01, 0.16]} />
+        <meshLambertMaterial color="#F4F1EC" />
+      </mesh>
+    </group>
+  );
+}
+
+function ProjectorCart({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <Block position={[0, 0.28, 0]} size={[0.62, 0.08, 0.4]} color="#4A4F57" />
+      {[
+        [-0.22, 0.1, -0.14],
+        [0.22, 0.1, -0.14],
+        [-0.22, 0.1, 0.14],
+        [0.22, 0.1, 0.14],
+      ].map((wheel) => (
+        <mesh key={wheel.join()} position={wheel as [number, number, number]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.07, 0.07, 0.05, 8]} />
+          <meshLambertMaterial color="#2E3138" />
+        </mesh>
+      ))}
+      <Block position={[0, 0.46, 0]} size={[0.36, 0.22, 0.26]} color="#F4F1EC" />
+      <mesh position={[-0.2, 0.48, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[0.06, 0.06, 0.08, 8]} />
+        <meshLambertMaterial color="#7C3AED" emissive="#7C3AED" emissiveIntensity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+function SlidePinboard({ position }: { position: [number, number, number] }) {
+  const cards = ["#F4F1EC", "#E4DAF3", "#F8E3C2", "#D9DCF7", "#F7D3DD", "#CDE8F2"];
+  return (
+    <group position={position}>
+      <Block position={[0, 0, 0]} size={[1.15, 0.62, 0.04]} color="#C9A27A" />
+      {cards.map((color, index) => (
+        <Block
+          key={color}
+          position={[-0.38 + (index % 3) * 0.38, 0.12 - Math.floor(index / 3) * 0.28, 0.035]}
+          size={[0.28, 0.18, 0.015]}
+          color={color}
+          radius={0.01}
+        />
+      ))}
+    </group>
+  );
+}
+
+function Flipchart({ position }: { position: [number, number, number] }) {
+  const bars = [
+    { h: 0.22, color: "#C4B5FD" },
+    { h: 0.38, color: "#8B5CF6" },
+    { h: 0.28, color: "#A78BFA" },
+  ];
+  return (
+    <group position={position}>
+      <mesh position={[-0.22, 0.55, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.025, 1.1, 6]} />
+        <meshLambertMaterial color="#4A4F57" />
+      </mesh>
+      <mesh position={[0.22, 0.55, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.025, 1.1, 6]} />
+        <meshLambertMaterial color="#4A4F57" />
+      </mesh>
+      <Block position={[0, 0.95, 0]} size={[0.7, 0.55, 0.04]} color="#F4F1EC" />
+      {bars.map((bar, index) => (
+        <mesh key={bar.color} position={[-0.18 + index * 0.18, 0.78 + bar.h / 2, 0.03]}>
+          <boxGeometry args={[0.1, bar.h, 0.012]} />
+          <meshLambertMaterial color={bar.color} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function RehearsalTable({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <Block position={[0, 0.74, 0]} size={[2.05, 0.08, 0.58]} color="#C89F74" />
+      {[
+        [-0.9, 0.36, -0.22],
+        [0.9, 0.36, -0.22],
+        [-0.9, 0.36, 0.22],
+        [0.9, 0.36, 0.22],
+      ].map((leg) => (
+        <Block key={leg.join()} position={leg as [number, number, number]} size={[0.06, 0.68, 0.06]} color="#4A4F57" radius={0.02} />
+      ))}
+      <mesh position={[-0.45, 0.86, 0]} rotation={[-0.4, 0.2, 0]} castShadow>
+        <boxGeometry args={[0.28, 0.18, 0.02]} />
+        <meshLambertMaterial color="#9FD8FF" emissive="#9FD8FF" emissiveIntensity={0.3} />
+      </mesh>
+      <Block position={[-0.45, 0.8, 0.02]} size={[0.28, 0.02, 0.2]} color="#2E3138" radius={0.01} />
+      <Block position={[0.15, 0.8, 0.04]} size={[0.22, 0.04, 0.16]} color="#F4F1EC" radius={0.008} />
+      <Block position={[0.18, 0.84, 0.02]} size={[0.2, 0.03, 0.15]} color="#E4DAF3" radius={0.008} />
+      <Block position={[0.55, 0.8, -0.04]} size={[0.18, 0.035, 0.14]} color="#F8E3C2" radius={0.008} />
+    </group>
+  );
+}
+
+function LoungeSeat({ position, rotation }: { position: [number, number, number]; rotation: number }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      <Block position={[0, 0.22, 0]} size={[0.62, 0.22, 0.58]} color="#FBE6CF" />
+      <Block position={[0, 0.42, -0.22]} size={[0.62, 0.32, 0.12]} color="#F4D2B0" />
+      <Block position={[-0.28, 0.34, 0.02]} size={[0.08, 0.16, 0.5]} color="#F4D2B0" />
+      <Block position={[0.28, 0.34, 0.02]} size={[0.08, 0.16, 0.5]} color="#F4D2B0" />
+    </group>
+  );
+}
+
+function SideTable({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <Block position={[0, 0.32, 0]} size={[0.42, 0.06, 0.42]} color="#C89F74" />
+      <Block position={[0, 0.16, 0]} size={[0.08, 0.28, 0.08]} color="#4A4F57" radius={0.02} />
+      <mesh position={[0.08, 0.4, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.04, 0.08, 8]} />
+        <meshLambertMaterial color="#F4F1EC" />
+      </mesh>
     </group>
   );
 }
@@ -430,6 +610,75 @@ function Globe({ position }: { position: [number, number, number] }) {
         <cylinderGeometry args={[0.02, 0.02, 0.12, 6]} />
         <meshLambertMaterial color="#4A4F57" />
       </mesh>
+    </group>
+  );
+}
+
+function ReservedPods() {
+  const speaking = useOfficeStore((state) => Array.from(state.agents.values()).some((agent) => agent.speechBubble));
+  return (
+    <group>
+      {layout.reserved.map((slot) => {
+        const desk = at(slot.x + slot.width / 2, slot.y + slot.height * 0.42);
+        const chair = at(slot.x + slot.width / 2, slot.y + slot.height * 0.42 + 36);
+        return (
+          <group key={`${slot.col}-${slot.row}`}>
+            <DashOutline
+              corners={[
+                { x: slot.x + 14, y: slot.y + 14 },
+                { x: slot.x + slot.width - 14, y: slot.y + 14 },
+                { x: slot.x + slot.width - 14, y: slot.y + slot.height - 14 },
+                { x: slot.x + 14, y: slot.y + slot.height - 14 },
+              ]}
+            />
+            <Desk position={desk} />
+            <Chair position={chair} />
+            <ZoneSign text="預留" position={at(slot.x + 36, slot.y + 22, 0.2)} hidden={speaking} align="end" />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+function DashOutline({ corners }: { corners: Array<{ x: number; y: number }> }) {
+  return (
+    <group>
+      {corners.map((start, index) => (
+        <DashEdge key={index} a={start} b={corners[(index + 1) % corners.length]} />
+      ))}
+    </group>
+  );
+}
+
+function DashEdge({ a, b }: { a: { x: number; y: number }; b: { x: number; y: number } }) {
+  const [ax, , az] = svgToWorld(a);
+  const [bx, , bz] = svgToWorld(b);
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  const dash = 0.22;
+  const gap = 0.16;
+  const step = dash + gap;
+  const count = Math.max(1, Math.floor(len / step));
+  const ux = dx / (len || 1);
+  const uz = dz / (len || 1);
+  return (
+    <group>
+      {Array.from({ length: count }, (_, index) => {
+        const distance = (index + 0.5) * step;
+        if (distance > len) return null;
+        return (
+          <mesh
+            key={index}
+            position={[ax + ux * distance, 0.025, az + uz * distance]}
+            rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]}
+          >
+            <planeGeometry args={[Math.min(dash, len), 0.045]} />
+            <meshBasicMaterial color="#A78BFA" transparent opacity={0.75} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }

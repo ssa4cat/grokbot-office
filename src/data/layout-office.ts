@@ -71,10 +71,35 @@ export interface TeamConfig {
     title: string;
     subtitle: string;
     columns: number;
+    /** Empty cells drawn after the packed zones. A new zone with no col/row takes the first of these. */
+    reserveSlots: number;
   };
   zones: ZoneInput[];
   agents: AgentInput[];
   links: LinkInput[];
+}
+
+export interface Station {
+  desk: { x: number; y: number };
+  seat: { x: number; y: number };
+}
+
+/** Desk, and the chair just in front of it (larger y, toward the camera). The robot's home is the seat. */
+export function stationsFor(zone: PlacedZone, count: number): Station[] {
+  const n = Math.max(1, count);
+  const deskY =
+    zone.furnishing === "slides"
+      ? zone.y + zone.height * 0.5
+      : zone.furnishing === "command"
+        ? zone.y + zone.height * 0.46
+        : zone.y + zone.height * 0.4;
+  return Array.from({ length: n }, (_, index) => {
+    const x =
+      zone.furnishing === "slides"
+        ? zone.x + zone.width * (0.22 + (0.16 * (index + 1)) / (n + 1))
+        : zone.x + (zone.width * (index + 1)) / (n + 1);
+    return { desk: { x, y: deskY }, seat: { x, y: deskY + 56 } };
+  });
 }
 
 export interface PlacedZone {
@@ -93,6 +118,15 @@ export interface PlacedZone {
   height: number;
 }
 
+export interface ReservedSlot {
+  col: number;
+  row: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface OfficeLayout {
   width: number;
   height: number;
@@ -105,6 +139,7 @@ export interface OfficeLayout {
   cellWidth: number;
   amenity: { x: number; y: number; width: number; height: number };
   zones: PlacedZone[];
+  reserved: ReservedSlot[];
   seats: Array<{ agentId: string; zoneId: string; x: number; y: number }>;
 }
 
@@ -175,6 +210,11 @@ export function parseTeam(input: unknown): TeamConfig {
   const columns = officeRaw.columns === undefined ? 4 : officeRaw.columns;
   if (typeof columns !== "number" || !Number.isInteger(columns) || columns < 1 || columns > 8) {
     throw new Error("office.columns 必須是 1 到 8 的整數。");
+  }
+  const reserveRaw = officeRaw.reserveSlots;
+  const reserveSlots = reserveRaw === undefined ? 2 : reserveRaw;
+  if (typeof reserveSlots !== "number" || !Number.isInteger(reserveSlots) || reserveSlots < 0 || reserveSlots > 8) {
+    throw new Error("office.reserveSlots 必須是 0 到 8 的整數。");
   }
 
   if (!Array.isArray(input.zones)) throw new Error("zones 必須是陣列。");
@@ -284,7 +324,7 @@ export function parseTeam(input: unknown): TeamConfig {
     return { from, to, kind: kindRaw, pipeline, label: optString(item, "label") ?? "" };
   });
 
-  return { office: { title, subtitle, columns }, zones, agents, links };
+  return { office: { title, subtitle, columns, reserveSlots }, zones, agents, links };
 }
 
 export function layoutTeam(config: TeamConfig): OfficeLayout {
@@ -355,9 +395,26 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     if (!placed) throw new Error(`區域「${zone.name}」沒有空位可放。`);
   }
 
+  const reservedDrafts: Array<{ col: number; row: number }> = [];
+  for (let index = 0; index < config.office.reserveSlots; index++) {
+    let placed = false;
+    for (let row = 0; row < 40 && !placed; row++) {
+      for (let col = 0; col < columns; col++) {
+        if (!canPlace(col, row, 1, 1)) continue;
+        occupy(col, row, 1, 1);
+        reservedDrafts.push({ col, row });
+        placed = true;
+        break;
+      }
+    }
+  }
+
   let rowCount = 1;
   for (const draft of drafts.values()) {
     rowCount = Math.max(rowCount, draft.row + draft.rowSpan);
+  }
+  for (const slot of reservedDrafts) {
+    rowCount = Math.max(rowCount, slot.row + 1);
   }
   const cellH = rowCount > 2 ? 210 : 248;
 
@@ -395,13 +452,23 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     members.set(agent.zone, list);
   }
 
+  const reserved: ReservedSlot[] = reservedDrafts.map((slot) => ({
+    col: slot.col,
+    row: slot.row,
+    x: padding + slot.col * (cellW + gap),
+    y: gridTop + slot.row * (cellH + gap),
+    width: cellW,
+    height: cellH,
+  }));
+
   const seats = zones.flatMap((zone) => {
     const group = members.get(zone.id) ?? [];
+    const spots = stationsFor(zone, group.length);
     return group.map((agent, index) => ({
       agentId: agent.id,
       zoneId: zone.id,
-      x: zone.id === "slides" ? zone.x + zone.width * 0.32 : zone.x + (zone.width * (index + 1)) / (group.length + 1),
-      y: zone.id === "slides" ? zone.y + zone.height * 0.34 : zone.y + zone.height * 0.74,
+      x: spots[index]?.seat.x ?? zone.x + zone.width / 2,
+      y: spots[index]?.seat.y ?? zone.y + zone.height * 0.7,
     }));
   });
 
@@ -417,6 +484,7 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     cellWidth: cellW,
     amenity: { x: padding, y: amenityY, width: gridWidth, height: amenityH },
     zones,
+    reserved,
     seats,
   };
 }
@@ -513,6 +581,7 @@ function emptyLayout(): OfficeLayout {
     cellWidth: 320,
     amenity: { x: 18, y: 340, width: 764, height: 112 },
     zones: [],
+    reserved: [],
     seats: [],
   };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getProfile } from "@/data/layout-office";
 import { useOfficeStore } from "@/store/office-store";
-import { shortWalk, zoneByAgent } from "@/components/office-3d/walkways";
+import { handoffPoints, shortWalk, zoneByAgent } from "@/components/office-3d/walkways";
 
 const LINES: Record<string, string[]> = {
   researcher: ["找到三篇可以引用的來源。", "這則背景先收進資料室。"],
@@ -100,6 +100,12 @@ export function useDynamicShow(): void {
         const sequence = step.current % 14 === 0 ? SLIDES : ARTICLE;
         const pair = sequence[Math.floor(step.current / 7) % sequence.length];
         fresh.setActiveHandoff({ sourceId: pair[0], targetId: pair[1] });
+        const trip = handoffPoints(pair[0], pair[1]);
+        const home = homes.get(pair[0]);
+        const sender = useOfficeStore.getState().agents.get(pair[0]);
+        if (trip.length > 1 && home && sender && !sender.movement) {
+          fresh.followPath(pair[0], [...trip, ...[...trip].reverse().slice(1)], 5.5);
+        }
         window.setTimeout(() => {
           if (useOfficeStore.getState().dynamicDisplay) useOfficeStore.getState().setActiveHandoff(null);
         }, 3200);

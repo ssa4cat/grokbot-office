@@ -73,6 +73,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
   const isSelected = selectedAgentId === agent.id;
   const [targetX, , targetZ] = svgToWorld(agent.position);
   const fadeLabel = useOfficeStore((state) => Array.from(state.agents.values()).some((other) => other.speechBubble));
+  const yaw = useRef(Math.PI);
 
   useFrame((state, delta) => {
     if (!groupRef.current || !bodyRef.current) return;
@@ -82,6 +83,21 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
     pos.x += (targetX - pos.x) * lerp;
     pos.z += (targetZ - pos.z) * lerp;
     bodyRef.current.position.y = agent.movement ? Math.abs(Math.sin(time * 8)) * 0.04 : Math.sin(time * 2) * 0.015;
+    let targetYaw = Math.PI;
+    const move = agent.movement;
+    if (move && move.path.length > 1) {
+      const index = Math.min(move.path.length - 1, Math.max(1, Math.ceil(move.progress * (move.path.length - 1))));
+      const next = move.path[index];
+      const prev = move.path[index - 1];
+      const [ax, , az] = svgToWorld(prev);
+      const [bx, , bz] = svgToWorld(next);
+      if (Math.hypot(bx - ax, bz - az) > 0.02) targetYaw = Math.atan2(bx - ax, bz - az);
+    }
+    let turn = targetYaw - yaw.current;
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    yaw.current += turn * Math.min(1, delta * 6);
+    groupRef.current.rotation.y = yaw.current;
   });
 
   const eye = agent.status === "idle" ? "#67e8f9" : accent;
