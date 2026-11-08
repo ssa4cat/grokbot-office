@@ -400,8 +400,8 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     return group.map((agent, index) => ({
       agentId: agent.id,
       zoneId: zone.id,
-      x: zone.x + (zone.width * (index + 1)) / (group.length + 1),
-      y: zone.y + zone.height * 0.74,
+      x: zone.id === "slides" ? zone.x + zone.width * 0.32 : zone.x + (zone.width * (index + 1)) / (group.length + 1),
+      y: zone.id === "slides" ? zone.y + zone.height * 0.34 : zone.y + zone.height * 0.74,
     }));
   });
 

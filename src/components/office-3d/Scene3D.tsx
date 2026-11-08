@@ -1,6 +1,6 @@
-import { Line, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
 import { handoffPoints } from "./walkways";
@@ -32,8 +32,42 @@ function BackgroundSync() {
 function flowPoints(sourceId: string, targetId: string): Array<[number, number, number]> {
   return handoffPoints(sourceId, targetId).map((point) => {
     const [x, , z] = svgToWorld(point);
-    return [x, 0.08, z];
+    return [x, 0.05, z];
   });
+}
+
+function FlowRibbon({
+  points,
+  color,
+  opacity,
+  width,
+}: {
+  points: Array<[number, number, number]>;
+  color: string;
+  opacity: number;
+  width: number;
+}) {
+  return (
+    <group>
+      {points.slice(0, -1).map((start, index) => {
+        const end = points[index + 1];
+        const dx = end[0] - start[0];
+        const dz = end[2] - start[2];
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) return null;
+        return (
+          <mesh
+            key={index}
+            position={[(start[0] + end[0]) / 2, 0.05, (start[2] + end[2]) / 2]}
+            rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]}
+          >
+            <planeGeometry args={[len, width]} />
+            <meshLambertMaterial color={color} transparent opacity={opacity} depthWrite={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
 }
 
 function CollabLines() {
@@ -57,9 +91,9 @@ function CollabLines() {
       return [{
         key: `${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`,
         points,
-        color: hot ? "#C4B5FD" : "#A78BFA",
+        color: hot ? "#7C3AED" : "#A78BFA",
         opacity: hot ? 1 : 0.6,
-        width: hot ? 2.4 : 1,
+        width: hot ? 0.16 : 0.07,
         dashed: link.kind === "return",
         tip,
       }];
@@ -70,39 +104,107 @@ function CollabLines() {
     <group>
       {curves.map((curve) => (
         <group key={curve.key}>
-          <Line points={curve.points} color={curve.color} lineWidth={curve.width} transparent opacity={curve.opacity} dashed={curve.dashed} dashSize={0.08} gapSize={0.06} />
-          <mesh position={curve.tip}>
-            <sphereGeometry args={[0.05, 10, 10]} />
-            <meshStandardMaterial color={curve.color} emissive={curve.color} emissiveIntensity={0.8} />
-          </mesh>
+          <FlowRibbon points={curve.points} color={curve.color} opacity={curve.opacity} width={curve.width} />
         </group>
       ))}
     </group>
   );
 }
 
+function floorFrame() {
+  const [floorX, , floorZ] = svgToWorld({ x: staticOffice.layout.width / 2, y: staticOffice.layout.height / 2 });
+  const floorW = 18.6;
+  const floorD = (staticOffice.layout.height / staticOffice.layout.width) * 18 + 1.2;
+  return { floorX, floorZ, floorW, floorD };
+}
+
+function FitCamera() {
+  const { camera, size } = useThree();
+  const controls = useThree((state) => state.controls) as { target: THREE.Vector3; update: () => void } | null;
+  const { floorX, floorZ, floorW, floorD } = floorFrame();
+
+  useLayoutEffect(() => {
+    const persp = camera as THREE.PerspectiveCamera;
+    if (!persp.isPerspectiveCamera) return;
+    const center = new THREE.Vector3(floorX, 0.55, floorZ);
+    const corners: THREE.Vector3[] = [];
+    for (const y of [0, 1.9]) {
+      for (const x of [floorX - floorW / 2, floorX + floorW / 2]) {
+        for (const z of [floorZ - floorD / 2, floorZ + floorD / 2]) {
+          corners.push(new THREE.Vector3(x, y, z));
+        }
+      }
+    }
+    const elev = (38 * Math.PI) / 180;
+    const azimuth = 0.62;
+    const margin = 24;
+    let lo = 8;
+    let hi = 110;
+    const place = (dist: number) => {
+      persp.position.set(
+        center.x + Math.cos(elev) * dist * Math.sin(azimuth),
+        center.y + Math.sin(elev) * dist,
+        center.z + Math.cos(elev) * dist * Math.cos(azimuth),
+      );
+      persp.lookAt(center);
+      persp.updateProjectionMatrix();
+      persp.updateMatrixWorld();
+    };
+    for (let i = 0; i < 24; i++) {
+      const dist = (lo + hi) / 2;
+      place(dist);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const corner of corners) {
+        const projected = corner.clone().project(persp);
+        const sx = (projected.x * 0.5 + 0.5) * size.width;
+        const sy = (-projected.y * 0.5 + 0.5) * size.height;
+        minX = Math.min(minX, sx);
+        maxX = Math.max(maxX, sx);
+        minY = Math.min(minY, sy);
+        maxY = Math.max(maxY, sy);
+      }
+      const scale = Math.max((maxX - minX) / (size.width - margin * 2), (maxY - minY) / (size.height - margin * 2));
+      const outside = minX < margin || minY < margin || maxX > size.width - margin || maxY > size.height - margin;
+      if (outside || scale > 0.85) lo = dist;
+      else hi = dist;
+    }
+    place(hi);
+    if (controls) {
+      controls.target.copy(center);
+      controls.update();
+    }
+  }, [camera, controls, floorD, floorW, floorX, floorZ, size.height, size.width]);
+
+  return null;
+}
+
 function SceneContent() {
   const agents = useOfficeStore((s) => s.agents);
   const theme = useOfficeStore((s) => s.theme);
   const agentList = Array.from(agents.values()).filter((agent) => !agent.isPlaceholder);
-  const depth = staticOffice.layout.worldDepth;
-  const target: [number, number, number] = [WORLD_WIDTH / 2, 0.3, depth * 0.58];
+  const { floorX, floorZ } = floorFrame();
+  const target: [number, number, number] = [floorX, 0.55, floorZ];
 
   return (
     <>
       <BackgroundSync />
       <OrbitControls
+        makeDefault
         enableRotate
         enablePan
         enableZoom
-        minPolarAngle={0.72}
-        maxPolarAngle={1.2}
-        minDistance={8}
-        maxDistance={36}
+        minPolarAngle={0.7}
+        maxPolarAngle={1.15}
+        minDistance={10}
+        maxDistance={120}
         target={target}
         enableDamping
         dampingFactor={0.08}
       />
+      <FitCamera />
       <GrokRoom3D theme={theme} />
       <CollabLines />
       {agentList.map((agent) => (

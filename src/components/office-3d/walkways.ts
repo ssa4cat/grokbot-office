@@ -48,6 +48,9 @@ export function commandCenter(): Pt {
 
 /** Desk-side standing spot: in front of the desk, toward the camera (larger y). */
 export function standPoint(zone: PlacedZone): Pt {
+  if (zone.id === "slides") {
+    return { x: zone.x + zone.width * 0.32, y: zone.y + zone.height * 0.34 };
+  }
   return { x: zone.x + zone.width / 2, y: zone.y + zone.height * 0.74 };
 }
 

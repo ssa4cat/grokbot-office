@@ -1,8 +1,8 @@
 import { Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useRef, useState } from "react";
+import { Vector3, type Group } from "three";
 import { useTranslation } from "react-i18next";
-import type { Group } from "three";
 import { getProfile, svgToWorld, type Accessory } from "@/data/layout-office";
 import type { VisualAgent } from "@/gateway/types";
 import { useOfficeStore } from "@/store/office-store";
@@ -12,6 +12,51 @@ import { ThinkingIndicator } from "./ThinkingIndicator";
 
 interface AgentCharacterProps {
   agent: VisualAgent;
+}
+
+function SpeechBubble({ text }: { text: string }) {
+  const anchor = useRef<Group>(null);
+  const { camera, size } = useThree();
+  const [below, setBelow] = useState(false);
+  const [shift, setShift] = useState(0);
+  const scratch = useRef(new Vector3());
+
+  useFrame(() => {
+    const node = anchor.current;
+    if (!node) return;
+    const world = node.getWorldPosition(scratch.current);
+    world.y += 1.55;
+    const projected = world.clone().project(camera);
+    const sx = (projected.x * 0.5 + 0.5) * size.width;
+    const sy = (-projected.y * 0.5 + 0.5) * size.height;
+    const nextBelow = sy < 88;
+    let nextShift = 0;
+    if (sx < 118) nextShift = 118 - sx;
+    if (sx > size.width - 118) nextShift = size.width - 118 - sx;
+    setBelow((prev) => (prev === nextBelow ? prev : nextBelow));
+    setShift((prev) => (Math.abs(prev - nextShift) < 4 ? prev : nextShift));
+  });
+
+  return (
+    <group ref={anchor}>
+      <Html position={[0, below ? 0.15 : 1.62, 0]} center zIndexRange={[40, 0]} style={{ pointerEvents: "none" }}>
+        <div
+          className="pointer-events-none rounded-2xl bg-white px-2.5 py-1.5 text-left text-[12px] leading-snug text-slate-700 shadow"
+          style={{
+            width: 168,
+            minWidth: 120,
+            maxWidth: 200,
+            whiteSpace: "normal",
+            writingMode: "horizontal-tb",
+            wordBreak: "break-word",
+            transform: `translateX(${shift}px)`,
+          }}
+        >
+          {text}
+        </div>
+      </Html>
+    </group>
+  );
 }
 
 const MODEL_SCALE = 1.15;
@@ -119,13 +164,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
         </mesh>
       )}
 
-      {agent.speechBubble && (
-        <Html position={[0, 1.72, 0]} center zIndexRange={[30, 0]} style={{ pointerEvents: "none" }}>
-          <div className="pointer-events-none max-w-[180px] rounded-2xl bg-white px-2.5 py-1.5 text-center text-[11px] leading-snug text-slate-700 shadow">
-            {agent.speechBubble.text}
-          </div>
-        </Html>
-      )}
+      {agent.speechBubble && <SpeechBubble text={agent.speechBubble.text} />}
       <Html position={[0, 1.28, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
         <div
           className="pointer-events-none whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-center text-[11px] font-semibold text-slate-700 shadow transition-opacity"

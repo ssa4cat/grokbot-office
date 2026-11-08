@@ -170,24 +170,28 @@ function ZoneWalls({ zone }: { zone: PlacedZone }) {
   const maxX = Math.max(x0, x1);
   const minZ = Math.min(z0, z1);
   const maxZ = Math.max(z0, z1);
-  const h = 0.3;
   const t = 0.07;
-  const walls: Array<{ pos: [number, number, number]; size: [number, number, number] }> = [];
+  const walls: Array<{ pos: [number, number, number]; size: [number, number, number]; fade: boolean }> = [];
   const span = (full: number, gap: boolean) => (gap ? full * 0.34 : full);
   const pushEdge = (axis: "x" | "z", atEdge: number, positive: boolean) => {
     const gap = (axis === "x") === openX && positive === openPositive;
+    const facingCamera = (axis === "z" && positive) || (axis === "x" && positive);
+    const h = facingCamera ? 0.3 : 0.45;
+    const piece = (pos: [number, number, number], size: [number, number, number]) => {
+      walls.push({ pos, size, fade: facingCamera });
+    };
     if (axis === "z") {
       const full = maxX - minX;
       const length = span(full, gap);
-      const shift = gap ? (full * 0.3) : 0;
-      walls.push({ pos: [minX + full / 2 - shift, h / 2, atEdge], size: [length, h, t] });
-      if (gap) walls.push({ pos: [minX + full / 2 + shift, h / 2, atEdge], size: [length, h, t] });
+      const shift = gap ? full * 0.3 : 0;
+      piece([minX + full / 2 - shift, h / 2, atEdge], [length, h, t]);
+      if (gap) piece([minX + full / 2 + shift, h / 2, atEdge], [length, h, t]);
     } else {
       const full = maxZ - minZ;
       const length = span(full, gap);
       const shift = gap ? full * 0.3 : 0;
-      walls.push({ pos: [atEdge, h / 2, minZ + full / 2 - shift], size: [t, h, length] });
-      if (gap) walls.push({ pos: [atEdge, h / 2, minZ + full / 2 + shift], size: [t, h, length] });
+      piece([atEdge, h / 2, minZ + full / 2 - shift], [t, h, length]);
+      if (gap) piece([atEdge, h / 2, minZ + full / 2 + shift], [t, h, length]);
     }
   };
   pushEdge("z", minZ, false);
@@ -197,9 +201,9 @@ function ZoneWalls({ zone }: { zone: PlacedZone }) {
   return (
     <group>
       {walls.map((wall, index) => (
-        <mesh key={index} position={wall.pos} castShadow receiveShadow>
+        <mesh key={index} position={wall.pos} castShadow={!wall.fade} receiveShadow>
           <boxGeometry args={wall.size} />
-          <meshLambertMaterial color="#F4F1EC" />
+          <meshLambertMaterial color="#F4F1EC" transparent={wall.fade} opacity={wall.fade ? 0.35 : 1} depthWrite={!wall.fade} />
         </mesh>
       ))}
     </group>
@@ -358,40 +362,30 @@ function CommandRoom({ zone }: { zone: PlacedZone }) {
 }
 
 function SlidesRoom({ zone }: { zone: PlacedZone }) {
-  const screenX = zone.x + zone.width * 0.38;
-  const screenY = zone.y + 48;
+  const anchor = at(zone.x + zone.width * 0.5, zone.y + 30);
+  const screen: [number, number, number] = [anchor[0], 1 + 0.85, anchor[2]];
+  const bars = [
+    { h: 0.7, color: "#8B5CF6" },
+    { h: 1.15, color: "#A78BFA" },
+    { h: 0.85, color: "#C4B5FD" },
+  ];
   return (
     <group>
-      <Block position={at(screenX, screenY, 0.7)} size={[2.2, 1.15, 0.06]} color="#F4F1EC" />
-      <mesh position={at(screenX, screenY, 0.76)}>
-        <planeGeometry args={[2.0, 0.95]} />
-        <meshLambertMaterial color="#F8FAFC" emissive="#EDE9FE" emissiveIntensity={0.25} />
+      <mesh position={screen} castShadow>
+        <boxGeometry args={[3, 1.7, 0.06]} />
+        <meshLambertMaterial color="#FFFFFF" emissive="#FFFFFF" emissiveIntensity={0.25} />
       </mesh>
-      {[0.35, 0.62, 0.48].map((height, index) => (
-        <mesh key={index} position={at(screenX - 0.55 + index * 0.5, screenY, 0.8)}>
-          <boxGeometry args={[0.22, height, 0.02]} />
-          <meshLambertMaterial color="#A78BFA" />
+      {bars.map((bar, index) => (
+        <mesh key={bar.color} position={[screen[0] - 0.7 + index * 0.7, 1 + bar.h / 2, screen[2] + 0.04]}>
+          <boxGeometry args={[0.32, bar.h, 0.02]} />
+          <meshLambertMaterial color={bar.color} />
         </mesh>
       ))}
-      <Block position={at(screenX + 1.3, screenY + 8, 0.4)} size={[0.46, 0.7, 0.4]} color="#C89F74" />
-      <ChairRows zone={zone} />
-      <Desk position={at(zone.x + 90, zone.y + zone.height * 0.55)} size={[1.4, 0.08, 0.6]} />
-    </group>
-  );
-}
-
-function ChairRows({ zone }: { zone: PlacedZone }) {
-  const seats: Array<{ x: number; y: number }> = [];
-  for (const row of [0.48, 0.64]) {
-    for (const col of [0.22, 0.34, 0.62, 0.74]) {
-      seats.push({ x: zone.x + zone.width * col, y: zone.y + zone.height * row });
-    }
-  }
-  return (
-    <group>
-      {seats.map((seat) => (
-        <Chair key={`${seat.x}-${seat.y}`} position={at(seat.x, seat.y)} />
-      ))}
+      {[1.25, 1.9].map((dz) =>
+        [-1.15, -0.5, 0.95].map((dx) => (
+          <Chair key={`${dz}-${dx}`} position={[screen[0] + dx, 0, screen[2] + dz]} />
+        )),
+      )}
     </group>
   );
 }
