@@ -12,6 +12,7 @@ interface RobotMarkerProps {
   status: AgentVisualStatus;
   selected: boolean;
   isDark: boolean;
+  pixelsPerUnit: number;
   onSelect: () => void;
 }
 
@@ -24,14 +25,20 @@ export function RobotMarker({
   status,
   selected,
   isDark,
+  pixelsPerUnit,
   onSelect,
 }: RobotMarkerProps) {
   const [hovered, setHovered] = useState(false);
   const shell = isDark ? "#e2e8f0" : "#ffffff";
   const ink = isDark ? "#e2e8f0" : "#334155";
   const eye = status === "idle" ? "#67e8f9" : STATUS_COLORS[status];
-
-  const plateWidth = Math.max(44, name.length * 12 + 14);
+  const unit = pixelsPerUnit > 0 ? pixelsPerUnit : 0.67;
+  const iconScale = 28 / unit / 57;
+  const gap = 6 / unit;
+  const plateFont = 12 / unit;
+  const plateHeight = 16 / unit;
+  const plateWidth = Math.max(44 / unit, name.length * plateFont + 14 / unit);
+  const iconShift = -gap + 8 * iconScale;
   return (
     <g
       transform={`translate(${x}, ${y})`}
@@ -43,7 +50,7 @@ export function RobotMarker({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <g transform="translate(0, -6) scale(0.58)">
+      <g transform={`translate(0, ${iconShift}) scale(${iconScale})`}>
       <ellipse cx={0} cy={6} rx={18} ry={5} fill={isDark ? "#020617" : "#94a3b8"} opacity={0.25} />
       {selected && <circle r={30} fill={accent} opacity={0.16} />}
       {(selected || hovered) && (
@@ -106,9 +113,9 @@ export function RobotMarker({
       <circle cx={0} cy={-62} r={3.1} fill={accent} />
       </g>
 
-      <g transform="translate(0, 8)">
-        <rect x={-plateWidth / 2} y={0} width={plateWidth} height={18} rx={8} fill={isDark ? "#2a2622" : "#ffffff"} stroke={isDark ? "#4A433B" : "#E7E1D8"} />
-        <text y={13} textAnchor="middle" fontSize={12} fontWeight={700} fill={ink} style={{ fontFamily: "inherit" }}>
+      <g transform="translate(0, 0)">
+        <rect x={-plateWidth / 2} y={0} width={plateWidth} height={plateHeight} rx={8 / unit} fill={isDark ? "#2a2622" : "#ffffff"} stroke={isDark ? "#4A433B" : "#E7E1D8"} />
+        <text y={plateHeight * 0.75} textAnchor="middle" fontSize={plateFont} fontWeight={700} fill={ink} style={{ fontFamily: "inherit" }}>
           {name}
         </text>
       </g>

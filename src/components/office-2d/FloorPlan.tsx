@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plant } from "@/components/office-2d/furniture/Plant";
 import { CoffeeCup } from "@/components/office-2d/furniture/CoffeeCup";
 import { RobotMarker } from "@/components/office-2d/RobotMarker";
@@ -22,26 +21,47 @@ const RUG: Record<string, string> = {
 };
 
 const NAME: Record<string, string> = {
-  research: "#2F7FA0",
-  writing: "#4C51B5",
-  editing: "#B45309",
-  studio: "#BE3A6A",
-  review: "#6D28D9",
-  command: "#0E7490",
-  workstation: "#047857",
-  lab: "#BE123C",
-  slides: "#6D28D9",
+  research: "#226A88",
+  writing: "#4549B6",
+  editing: "#8F5B14",
+  studio: "#A8395B",
+  review: "#7247B7",
+  command: "#21726B",
+  workstation: "#2D7444",
+  lab: "#A93B3B",
+  slides: "#6A49BB",
 };
 
-function shade(hex: string, dark: boolean): string {
-  if (!dark) return hex;
-  const value = Number.parseInt(hex.slice(1), 16);
-  const channel = (shift: number) => Math.round(((value >> shift) & 255) * 0.6).toString(16).padStart(2, "0");
-  return `#${channel(16)}${channel(8)}${channel(0)}`;
+const NAME_NIGHT: Record<string, string> = {
+  research: "#C2D7E0",
+  writing: "#C5C6DD",
+  editing: "#E3D4BF",
+  studio: "#DEC4CC",
+  review: "#CEC5DD",
+  command: "#C3DFDD",
+  workstation: "#C5DDCD",
+  lab: "#DEC5C5",
+  slides: "#CCC5DD",
+};
+
+const RUG_NIGHT: Record<string, string> = {
+  research: "#306072",
+  writing: "#3F4AA9",
+  editing: "#765522",
+  studio: "#93334E",
+  review: "#654491",
+  command: "#32685F",
+  workstation: "#376744",
+  lab: "#8E3838",
+  slides: "#60438D",
+};
+
+function rugFill(kind: string, dark: boolean): string {
+  if (dark) return RUG_NIGHT[kind] ?? "#4A4036";
+  return RUG[kind] ?? "#E7E1D8";
 }
 
 export function FloorPlan() {
-  const { t } = useTranslation("office");
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
   const theme = useOfficeStore((s) => s.theme);
@@ -49,6 +69,9 @@ export function FloorPlan() {
   const activeHandoff = useOfficeStore((s) => s.activeHandoff);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [unit, setUnit] = useState(0.67);
+  const px = (cssPx: number) => cssPx / unit;
   const isDark = theme === "dark";
   const layout = staticOffice.layout;
   const floor = isDark ? "#3A332C" : "#E8D9C4";
@@ -56,6 +79,22 @@ export function FloorPlan() {
   const wallEdge = isDark ? "#2E2924" : "#CDBBA2";
   const corridor = isDark ? "#4A4036" : "#F1E6D6";
   const grain = isDark ? "#2E2924" : "#DCCAB1";
+  useLayoutEffect(() => {
+    const node = svgRef.current;
+    if (!node) return;
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      const box = node.viewBox.baseVal;
+      if (!rect.width || !rect.height || !box.width || !box.height) return;
+      const scale = Math.min(rect.width / box.width, rect.height / box.height);
+      if (scale > 0) setUnit((current) => (Math.abs(current - scale) < 0.01 ? current : scale));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [layout.width, layout.height]);
+
   const routed = useMemo(
     () => routeLinks(layout, links.map((link) => ({ sourceId: link.sourceId, targetId: link.targetId, kind: link.kind, pipeline: link.pipeline }))),
     [layout, links],
@@ -64,6 +103,7 @@ export function FloorPlan() {
   return (
     <div className={`relative flex h-full w-full items-center justify-center overflow-hidden ${isDark ? "bg-[#241f1b]" : "bg-[#f3efe8]"}`}>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-full w-full"
         preserveAspectRatio="xMidYMid meet"
@@ -105,7 +145,7 @@ export function FloorPlan() {
               width={zone.width - 16}
               height={zone.height - 16}
               rx={6}
-              fill={shade(RUG[zone.furnishing] ?? "#E7E1D8", isDark)}
+              fill={rugFill(zone.furnishing, isDark)}
             />
           ))}
           <rect
@@ -114,7 +154,7 @@ export function FloorPlan() {
             width={layout.amenity.width - 16}
             height={layout.amenity.height - 16}
             rx={6}
-            fill={shade("#FBE6CF", isDark)}
+            fill={isDark ? "#6A4E32" : "#FBE6CF"}
           />
 
           {layout.zones.map((zone) => (
@@ -138,13 +178,13 @@ export function FloorPlan() {
                 }}
                 style={{ cursor: "pointer" }}
               >
-                <ZoneFurniture zone={zone} />
+                <ZoneFurniture zone={zone} px={px} />
                 <ZonePlant zone={zone} />
-                <text x={zone.x + 16} y={zone.y + 24} fill={NAME[zone.id] ?? "#4A4F57"} fontSize={14} fontWeight={700}>
+                <text x={zone.x + 16} y={zone.y + px(22)} fill={(isDark ? NAME_NIGHT : NAME)[zone.id] ?? "#4A4F57"} fontSize={px(14)} fontWeight={700}>
                   {zone.name}
                 </text>
                 {showCopy && (
-                  <text x={zone.x + 16} y={zone.y + 40} fill="#6B6258" fontSize={11}>
+                  <text x={zone.x + 16} y={zone.y + px(38)} fill={isDark ? "#E7E1D8" : "#6B6258"} fontSize={px(11)}>
                     {zone.summary}
                   </text>
                 )}
@@ -165,13 +205,20 @@ export function FloorPlan() {
                 strokeWidth={1.5}
                 strokeDasharray="7 6"
               />
-              <text x={slot.x + slot.width / 2} y={slot.y + slot.height / 2} textAnchor="middle" fill="#A89C8C" fontSize={12} fontWeight={700}>
+              <text
+                x={slot.x + slot.width / 2}
+                y={slot.y + slot.height / 2}
+                textAnchor="middle"
+                fill={isDark ? "#B5A898" : "#8C7F70"}
+                fontSize={px(12)}
+                fontWeight={700}
+              >
                 預留擴充
               </text>
             </g>
           ))}
 
-          <Lounge amenity={layout.amenity} isDark={isDark} />
+          <Lounge amenity={layout.amenity} isDark={isDark} px={px} />
         </g>
 
         {routed.map((link) => {
@@ -205,6 +252,7 @@ export function FloorPlan() {
               status={agent.status}
               selected={selectedAgentId === profile.id}
               isDark={isDark}
+              pixelsPerUnit={unit}
               onSelect={() => selectAgent(profile.id)}
             />
           );
@@ -226,26 +274,6 @@ export function FloorPlan() {
         })}
       </svg>
 
-      <div
-        className={`pointer-events-none absolute right-3 top-3 rounded-lg px-3 py-2 text-xs leading-5 ${isDark ? "bg-[#2c2824] text-[#e7e5e4]" : "bg-white text-[#3F3A34]"}`}
-        style={{ boxShadow: "0 2px 6px rgba(0,0,0,.08)" }}
-      >
-        <LegendRow color="#A78BFA" label={`${t("legendArticle")} ${t("legendFlow")}`} />
-        <LegendRow color="#A78BFA" label={`${t("legendArticle")} ${t("legendReturn")}`} dashed />
-        <LegendRow color="#6FB7C8" label={`${t("legendSlides")} ${t("legendFlow")}`} />
-        <LegendRow color="#6FB7C8" label={`${t("legendSlides")} ${t("legendReturn")}`} dashed />
-      </div>
-    </div>
-  );
-}
-
-function LegendRow({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <svg width="28" height="8" aria-hidden="true">
-        <line x1="0" y1="4" x2="28" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dashed ? "6 4" : undefined} />
-      </svg>
-      <span>{label}</span>
     </div>
   );
 }
@@ -316,12 +344,12 @@ function ZonePlant({ zone }: { zone: PlacedZone }) {
   );
 }
 
-function ZoneFurniture({ zone }: { zone: PlacedZone }) {
+function ZoneFurniture({ zone, px }: { zone: PlacedZone; px: (cssPx: number) => number }) {
   const boxH = Math.max(zone.height * 0.34, 68);
   const top = zone.y + 46;
   const left = zone.x + 28;
   const width = Math.min(zone.width - 56, zone.furnishing === "slides" ? zone.width * 0.7 : 220);
-  return <Furniture kind={zone.furnishing} x={left} y={top} width={width} height={boxH} zone={zone} />;
+  return <Furniture kind={zone.furnishing} x={left} y={top} width={width} height={boxH} zone={zone} px={px} />;
 }
 
 function Furniture({
@@ -331,6 +359,7 @@ function Furniture({
   width,
   height,
   zone,
+  px,
 }: {
   kind: Furnishing;
   x: number;
@@ -338,45 +367,73 @@ function Furniture({
   width: number;
   height: number;
   zone: PlacedZone;
+  px: (cssPx: number) => number;
 }) {
   const wood = "#C89F74";
   const metal = "#4A4F57";
   if (kind === "slides") {
     const screenW = zone.width * 0.4;
     const screenX = zone.x + (zone.width - screenW) / 2;
-    const screenY = zone.y + 18;
+    const screenY = zone.y + px(28);
+    const screenH = px(10);
+    const chair = px(14);
+    const gap = px(6);
+    const aisle = px(16);
+    const rowW = chair * 3 + gap * 2 + aisle;
+    const rowX = screenX + (screenW - rowW) / 2;
     return (
       <g>
-        <rect x={screenX} y={screenY} width={screenW} height={10} rx={2} fill="#FFFFFF" stroke="#CDBBA2" />
+        <rect x={screenX} y={screenY} width={screenW} height={screenH} rx={2} fill="#FFFFFF" stroke="#CDBBA2" />
         {[0, 1, 2].map((index) => (
-          <rect key={index} x={screenX + screenW * 0.22 + index * (screenW * 0.16)} y={screenY + 2} width={screenW * 0.1} height={6} rx={1} fill={["#8B5CF6", "#A78BFA", "#C4B5FD"][index]} />
+          <rect
+            key={index}
+            x={screenX + screenW * 0.28 + index * (screenW * 0.16)}
+            y={screenY + screenH * 0.2}
+            width={screenW * 0.1}
+            height={screenH * 0.6}
+            rx={1}
+            fill={["#8B5CF6", "#A78BFA", "#C4B5FD"][index]}
+          />
         ))}
         {[0, 1].map((row) =>
-          [0, 1, 2].map((col) => (
-            <rect
-              key={`${row}-${col}`}
-              x={screenX + screenW * 0.12 + col * (screenW * 0.28)}
-              y={screenY + 22 + row * 20}
-              width={14}
-              height={14}
-              rx={3}
-              fill="#C89F74"
-            />
-          )),
+          [0, 1, 2].map((col) => {
+            const extra = col > 1 ? aisle : 0;
+            return (
+              <rect
+                key={`${row}-${col}`}
+                x={rowX + col * (chair + gap) + extra}
+                y={screenY + screenH + px(12) + row * (chair + gap)}
+                width={chair}
+                height={chair}
+                rx={px(3)}
+                fill="#C89F74"
+              />
+            );
+          }),
         )}
-        <rect x={zone.x + 36} y={screenY + 28} width={28} height={22} rx={2} fill={wood} stroke={metal} />
+        <rect x={zone.x + px(22)} y={screenY + screenH + px(16)} width={px(20)} height={px(14)} rx={2} fill={wood} stroke={metal} />
       </g>
     );
   }
   if (kind === "command") {
-    const cx = x + width / 2;
-    const cy = y + height * 0.55;
+    const diameter = zone.height * 0.3;
+    const cx = zone.x + zone.width / 2;
+    const cy = zone.y + zone.height * 0.58;
     return (
       <g>
-        <ellipse cx={cx} cy={cy} rx={height * 0.46} ry={height * 0.28} fill="#7DD3C7" opacity={0.35} />
-        <ellipse cx={cx} cy={cy} rx={height * 0.34} ry={height * 0.2} fill={wood} />
+        <ellipse cx={cx} cy={cy} rx={diameter * 0.62} ry={diameter * 0.4} fill="#7DD3C7" opacity={0.35} />
+        <ellipse cx={cx} cy={cy} rx={diameter * 0.42} ry={diameter * 0.28} fill={wood} />
         {[-1, 0, 1].map((offset) => (
-          <rect key={offset} x={cx - 16 + offset * 28} y={cy - height * 0.42} width={22} height={14} rx={2} fill="#9FD8FF" stroke={metal} />
+          <rect
+            key={offset}
+            x={cx - px(9) + offset * px(26)}
+            y={cy - diameter * 0.55}
+            width={px(18)}
+            height={px(10)}
+            rx={2}
+            fill="#9FD8FF"
+            stroke={metal}
+          />
         ))}
       </g>
     );
@@ -420,13 +477,16 @@ function Furniture({
     );
   }
   if (kind === "studio") {
+    const easelH = zone.height * 0.3;
+    const topY = zone.y + zone.height * 0.34;
+    const palette = px(16);
     return (
       <g>
-        <path d={`M ${x + 28} ${y + height * 0.75} L ${x + 46} ${y} L ${x + 64} ${y + height * 0.75}`} fill="none" stroke={wood} strokeWidth={3} />
-        <rect x={x + 34} y={y + 8} width={24} height={height * 0.4} rx={2} fill="#FFFFFF" stroke="#F472B6" />
-        <circle cx={x + width * 0.55} cy={y + height * 0.45} r={16} fill="#F4F1EC" stroke={metal} />
-        <circle cx={x + width * 0.5} cy={y + height * 0.42} r={4} fill="#F7D3DD" />
-        <circle cx={x + width * 0.58} cy={y + height * 0.48} r={4} fill="#CDE8F2" />
+        <path d={`M ${x + 36} ${topY + easelH} L ${x + 54} ${topY} L ${x + 72} ${topY + easelH}`} fill="none" stroke={wood} strokeWidth={px(3)} />
+        <rect x={x + 42} y={topY + easelH * 0.12} width={px(28)} height={easelH * 0.62} rx={2} fill="#FFFFFF" stroke="#F472B6" />
+        <circle cx={x + width * 0.62} cy={topY + easelH * 0.7} r={palette / 2} fill="#F4F1EC" stroke={metal} />
+        <circle cx={x + width * 0.58} cy={topY + easelH * 0.64} r={palette * 0.16} fill="#F7D3DD" />
+        <circle cx={x + width * 0.66} cy={topY + easelH * 0.74} r={palette * 0.16} fill="#CDE8F2" />
       </g>
     );
   }
@@ -465,19 +525,35 @@ function Furniture({
   return <rect x={x} y={y + 16} width={width * 0.6} height={height * 0.45} rx={2} fill={wood} />;
 }
 
-function Lounge({ amenity, isDark }: { amenity: { x: number; y: number; width: number; height: number }; isDark: boolean }) {
+function Lounge({
+  amenity,
+  isDark,
+  px,
+}: {
+  amenity: { x: number; y: number; width: number; height: number };
+  isDark: boolean;
+  px: (cssPx: number) => number;
+}) {
   const { x, y, width, height } = amenity;
   const wood = isDark ? "#8A6A45" : "#C89F74";
+  const sofa = isDark ? "#8A6244" : "#F4D2B0";
+  const mid = x + width * 0.46;
   return (
     <g>
-      <rect x={x + 24} y={y + 28} width={78} height={28} rx={8} fill={isDark ? "#6A5340" : "#F4D2B0"} />
-      <rect x={x + 36} y={y + 18} width={54} height={22} rx={8} fill={isDark ? "#6A5340" : "#F4D2B0"} />
-      <rect x={x + 118} y={y + 36} width={36} height={22} rx={4} fill={wood} />
-      <rect x={x + width - 210} y={y + 30} width={120} height={28} rx={4} fill={wood} />
-      <rect x={x + width - 196} y={y + 22} width={22} height={16} rx={2} fill={isDark ? "#44403c" : "#F4F1EC"} />
-      <CoffeeCup x={x + width - 150} y={y + 40} />
-      <rect x={x + width - 70} y={y + 18} width={36} height={height - 34} rx={3} fill={isDark ? "#44403c" : "#E7E5E4"} stroke="#CDBBA2" />
-      <Plant x={x + width / 2} y={y + height - 28} />
+      <rect x={x + px(18)} y={y + px(16)} width={px(108)} height={px(58)} rx={px(8)} fill={isDark ? "#8C6848" : "#F3D3AE"} />
+      <rect x={x + px(28)} y={y + px(40)} width={px(64)} height={px(22)} rx={px(6)} fill={sofa} />
+      <rect x={x + px(40)} y={y + px(22)} width={px(40)} height={px(24)} rx={px(6)} fill={sofa} />
+      <rect x={x + px(96)} y={y + px(46)} width={px(28)} height={px(16)} rx={2} fill={wood} />
+      <circle cx={x + px(136)} cy={y + px(28)} r={px(5)} fill="#FFE2B8" stroke={wood} />
+      <rect x={x + px(148)} y={y + px(36)} width={px(40)} height={px(12)} rx={2} fill={wood} />
+      <rect x={mid} y={y + height * 0.38} width={px(36)} height={px(16)} rx={2} fill={wood} />
+      <rect x={mid + px(2)} y={y + height * 0.62} width={px(12)} height={px(10)} rx={2} fill={sofa} />
+      <rect x={mid + px(22)} y={y + height * 0.62} width={px(12)} height={px(10)} rx={2} fill={sofa} />
+      <rect x={x + width - px(230)} y={y + height * 0.32} width={px(120)} height={px(26)} rx={4} fill={wood} />
+      <rect x={x + width - px(214)} y={y + height * 0.16} width={px(22)} height={px(16)} rx={2} fill={isDark ? "#44403c" : "#F4F1EC"} />
+      <CoffeeCup x={x + width - px(160)} y={y + height * 0.48} />
+      <rect x={x + width - px(78)} y={y + px(14)} width={px(36)} height={height - px(28)} rx={3} fill={isDark ? "#44403c" : "#E7E5E4"} stroke="#CDBBA2" />
+      <Plant x={x + px(210)} y={y + height - px(18)} />
     </g>
   );
 }

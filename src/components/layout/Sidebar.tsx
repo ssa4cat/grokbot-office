@@ -6,8 +6,20 @@ import type { AgentVisualStatus } from "@/gateway/types";
 import { STATUS_COLORS } from "@/lib/constants";
 import { useOfficeStore } from "@/store/office-store";
 
+function PipelineLegend({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <svg width="28" height="8" aria-hidden="true">
+        <line x1="0" y1="4" x2="28" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dashed ? "6 4" : undefined} />
+      </svg>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { t } = useTranslation("layout");
+  const { t: officeT } = useTranslation("office");
   const agents = useOfficeStore((s) => s.agents);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
@@ -71,7 +83,10 @@ export function Sidebar() {
             const slides = pipeline === "slides";
             return (
               <div key={pipeline} className="mt-2">
-                <h3 className={`text-[11px] font-semibold ${slides ? "text-violet-700 dark:text-violet-300" : "text-cyan-700 dark:text-cyan-300"}`}>
+                <h3
+                  className="text-[11px] font-semibold"
+                  style={{ color: slides ? "#2E7F91" : "#6D4FB5" }}
+                >
                   {pipelineTitle(pipeline)}
                 </h3>
                 <ol className="mt-1 space-y-1">
@@ -80,13 +95,14 @@ export function Sidebar() {
                     return (
                       <li key={`${pipeline}-${link.sourceId}-${link.targetId}-${link.kind}`} className="text-xs leading-5 text-slate-600 dark:text-slate-300">
                         <span
-                          className={`mr-1 rounded px-1 text-[10px] ${
+                          className={`mr-1 rounded px-1 text-[10px] ${returning ? "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-200" : ""}`}
+                          style={
                             returning
-                              ? "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-200"
+                              ? undefined
                               : slides
-                                ? "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-200"
-                                : "bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200"
-                          }`}
+                                ? { color: "#2E7F91", backgroundColor: "#E3F3F7" }
+                                : { color: "#6D4FB5", backgroundColor: "#EDE7FB" }
+                          }
                         >
                           {returning ? t("sidebar.return") : t("sidebar.flow")}
                         </span>
@@ -99,6 +115,12 @@ export function Sidebar() {
               </div>
             );
           })}
+          <div className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+            <PipelineLegend color="#A78BFA" label={`${officeT("legendArticle")} ${officeT("legendFlow")}`} />
+            <PipelineLegend color="#A78BFA" label={`${officeT("legendArticle")} ${officeT("legendReturn")}`} dashed />
+            <PipelineLegend color="#6FB7C8" label={`${officeT("legendSlides")} ${officeT("legendFlow")}`} />
+            <PipelineLegend color="#6FB7C8" label={`${officeT("legendSlides")} ${officeT("legendReturn")}`} dashed />
+          </div>
         </section>
 
         <section className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">

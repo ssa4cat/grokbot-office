@@ -568,6 +568,16 @@ function Lounge() {
       <Sofa position={[sofa[0] + 0.55, 0, sofa[2] + 0.35]} rotation={-Math.PI / 2} />
       <Block position={[sofa[0], 0.18, sofa[2] + 0.15]} size={[0.55, 0.28, 0.4]} color="#C89F74" />
       <FloorLamp position={[sofa[0] - 1.05, 0, sofa[2] - 0.2]} />
+      <Block position={[sofa[0] + 1.7, 0.28, sofa[2] + 0.15]} size={[0.7, 0.42, 0.22]} color="#C89F74" />
+      <Block position={[sofa[0] + 2.55, 0.42, sofa[2]]} size={[0.55, 0.78, 0.4]} color="#C89F74" />
+      <mesh position={[sofa[0] + 2.35, 0.28, sofa[2] + 0.28]} castShadow>
+        <cylinderGeometry args={[0.08, 0.08, 0.5, 8]} />
+        <meshLambertMaterial color="#F4D2B0" />
+      </mesh>
+      <mesh position={[sofa[0] + 2.75, 0.28, sofa[2] + 0.28]} castShadow>
+        <cylinderGeometry args={[0.08, 0.08, 0.5, 8]} />
+        <meshLambertMaterial color="#F4D2B0" />
+      </mesh>
       <Block position={bar} size={[1.3, 0.72, 0.4]} color="#C89F74" />
       <CoffeeMachine position={[bar[0] - 0.3, 0.72, bar[2]]} />
       <Plant position={[bar[0] + 0.85, 0, bar[2]]} scale={1.4} />
