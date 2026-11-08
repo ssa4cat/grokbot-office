@@ -4,7 +4,7 @@ import { Plant } from "@/components/office-2d/furniture/Plant";
 import { CoffeeCup } from "@/components/office-2d/furniture/CoffeeCup";
 import { RobotMarker } from "@/components/office-2d/RobotMarker";
 import { ConnectionLine } from "@/components/office-2d/ConnectionLine";
-import { staticOffice, type Furnishing, type PlacedZone } from "@/data/layout-office";
+import { linkAppearance, staticOffice, type Furnishing, type PlacedZone } from "@/data/layout-office";
 import { useOfficeStore } from "@/store/office-store";
 
 export function FloorPlan() {
@@ -98,22 +98,42 @@ export function FloorPlan() {
           );
         })}
 
+        {links.some((link) => linkAppearance(link).corridor) && (
+          <text
+            x={layout.padding + 8}
+            y={layout.amenity.y - 50}
+            fontSize={11}
+            fontWeight={700}
+            fill="#7c3aed"
+          >
+            {t("legendSlides")}
+          </text>
+        )}
+
         {links.map((link) => {
           const source = agents.get(link.sourceId);
           const target = agents.get(link.targetId);
           if (!source || !target) return null;
-          const returning = link.kind === "return";
+          const look = linkAppearance(link);
+          const sourceZone = zoneForAgent(link.sourceId);
+          const targetZone = zoneForAgent(link.targetId);
+          const lane = corridorLane(link);
           return (
             <ConnectionLine
-              key={`${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`}
+              key={`${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`}
               x1={source.position.x}
-              y1={source.position.y - 28}
+              y1={source.position.y - 18}
               x2={target.position.x}
-              y2={target.position.y - 28}
+              y2={target.position.y - 18}
               strength={link.strength}
-              color={returning ? "#fb923c" : "#22d3ee"}
-              curve={returning ? -1 : 1}
-              dashed={returning}
+              color={look.color}
+              curve={look.curve}
+              dashed={look.dashed}
+              waypoints={
+                look.corridor && sourceZone && targetZone
+                  ? corridorWaypoints(source.position, target.position, sourceZone, targetZone, layout.amenity.y - 42 + lane * 8, layout.amenity.x + layout.amenity.width)
+                  : undefined
+              }
             />
           );
         })}
@@ -146,6 +166,8 @@ export function FloorPlan() {
           coffee={t("amenityCoffee")}
           legendFlow={t("legendFlow")}
           legendReturn={t("legendReturn")}
+          legendArticle={t("legendArticle")}
+          legendSlides={t("legendSlides")}
         />
       </svg>
     </div>
@@ -199,9 +221,48 @@ function OfficeHeader({
   );
 }
 
+function zoneForAgent(agentId: string): PlacedZone | undefined {
+  const seat = staticOffice.layout.seats.find((item) => item.agentId === agentId);
+  return staticOffice.layout.zones.find((zone) => zone.id === seat?.zoneId);
+}
+
+function corridorLane(link: { sourceId: string; targetId: string; kind?: string; pipeline?: string }): number {
+  const lanes = staticOffice.links.filter((item) => linkAppearance(item).corridor);
+  const index = lanes.findIndex(
+    (item) => item.sourceId === link.sourceId && item.targetId === link.targetId && item.kind === link.kind && item.pipeline === link.pipeline,
+  );
+  return Math.max(0, index);
+}
+
+function corridorWaypoints(
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  sourceZone: PlacedZone,
+  targetZone: PlacedZone,
+  laneY: number,
+  gridRight: number,
+): Array<{ x: number; y: number }> {
+  const gutter = (zone: PlacedZone) => {
+    if (zone.width > gridRight * 0.7) return zone.x + 28;
+    const right = zone.x + zone.width + 6;
+    return right > gridRight - 2 ? zone.x - 6 : right;
+  };
+  const exitY = (zone: PlacedZone) => zone.y + zone.height - 12;
+  const g1 = gutter(sourceZone);
+  const g2 = gutter(targetZone);
+  return [
+    { x: source.x, y: exitY(sourceZone) },
+    { x: g1, y: exitY(sourceZone) },
+    { x: g1, y: laneY },
+    { x: g2, y: laneY },
+    { x: g2, y: exitY(targetZone) },
+    { x: target.x, y: exitY(targetZone) },
+  ];
+}
+
 function ZoneFurniture({ zone, isDark }: { zone: PlacedZone; isDark: boolean }) {
   const cx = zone.x + zone.width / 2;
-  const cy = zone.y + 150;
+  const cy = zone.y + zone.height * 0.56;
   return (
     <g transform={`translate(${cx}, ${cy})`}>
       <Furniture kind={zone.furnishing} accent={zone.accent} isDark={isDark} />
@@ -212,6 +273,25 @@ function ZoneFurniture({ zone, isDark }: { zone: PlacedZone; isDark: boolean }) 
 function Furniture({ kind, accent, isDark }: { kind: Furnishing; accent: string; isDark: boolean }) {
   const desk = isDark ? "#1e293b" : "#f8fafc";
   const edge = isDark ? "#334155" : "#e2e8f0";
+  if (kind === "slides") {
+    return (
+      <g>
+        <HoloScreen accent={accent} w={210} h={72} y={-24}>
+          <rect x={-88} y={-60} width={70} height={8} rx={2} fill={accent} />
+          <rect x={-88} y={-44} width={22} height={28} rx={2} fill="#ddd6fe" />
+          <rect x={-60} y={-52} width={22} height={36} rx={2} fill={accent} />
+          <rect x={-32} y={-36} width={22} height={20} rx={2} fill="#c4b5fd" />
+        </HoloScreen>
+        <g transform="translate(180, -16)">
+          <rect x={-40} y={-36} width={80} height={52} rx={6} fill="#faf5ff" stroke={accent} />
+          <rect x={-26} y={-24} width={52} height={6} rx={2} fill={accent} />
+          <rect x={-26} y={-12} width={36} height={4} rx={2} fill="#ddd6fe" />
+          <rect x={-26} y={-4} width={44} height={4} rx={2} fill="#ddd6fe" />
+        </g>
+      </g>
+    );
+  }
+
   if (kind === "command") {
     return (
       <g>
@@ -358,6 +438,8 @@ function AmenityStrip({
   coffee,
   legendFlow,
   legendReturn,
+  legendArticle,
+  legendSlides,
 }: {
   amenity: { x: number; y: number; width: number; height: number };
   isDark: boolean;
@@ -367,6 +449,8 @@ function AmenityStrip({
   coffee: string;
   legendFlow: string;
   legendReturn: string;
+  legendArticle: string;
+  legendSlides: string;
 }) {
   const { x, y, width, height } = amenity;
   return (
@@ -375,12 +459,26 @@ function AmenityStrip({
       <text x={x + 18} y={y + 22} fontSize={13} fontWeight={800} fill={ink}>
         {lounge}
       </text>
-      <line x1={x + 78} y1={y + 17} x2={x + 108} y2={y + 17} stroke="#22d3ee" strokeWidth={3} />
-      <text x={x + 114} y={y + 22} fontSize={11} fill={muted}>
+      <text x={x + 78} y={y + 22} fontSize={11} fontWeight={700} fill={muted}>
+        {legendArticle}
+      </text>
+      <line x1={x + 112} y1={y + 18} x2={x + 140} y2={y + 18} stroke="#22d3ee" strokeWidth={3} />
+      <text x={x + 146} y={y + 22} fontSize={11} fill={muted}>
         {legendFlow}
       </text>
-      <line x1={x + 150} y1={y + 17} x2={x + 180} y2={y + 17} stroke="#fb923c" strokeWidth={3} strokeDasharray="4 3" />
-      <text x={x + 186} y={y + 22} fontSize={11} fill={muted}>
+      <line x1={x + 180} y1={y + 18} x2={x + 208} y2={y + 18} stroke="#fb923c" strokeWidth={3} strokeDasharray="4 3" />
+      <text x={x + 214} y={y + 22} fontSize={11} fill={muted}>
+        {legendReturn}
+      </text>
+      <text x={x + 258} y={y + 22} fontSize={11} fontWeight={700} fill="#7c3aed">
+        {legendSlides}
+      </text>
+      <line x1={x + 292} y1={y + 18} x2={x + 320} y2={y + 18} stroke="#7c3aed" strokeWidth={3} />
+      <text x={x + 326} y={y + 22} fontSize={11} fill={muted}>
+        {legendFlow}
+      </text>
+      <line x1={x + 360} y1={y + 18} x2={x + 388} y2={y + 18} stroke="#e879f9" strokeWidth={3} strokeDasharray="4 3" />
+      <text x={x + 394} y={y + 22} fontSize={11} fill={muted}>
         {legendReturn}
       </text>
       <rect x={x + 18} y={y + 40} width={150} height={46} rx={12} fill={isDark ? "#44403c" : "#ffffff"} stroke="#fdba74" />

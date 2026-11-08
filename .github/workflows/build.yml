@@ -1,10 +1,21 @@
-# 尚未啟用、也不會自動發布。
-# 只有在 GitHub 上手動按「Run workflow」時才會建置，產物留在 Actions artifact。
-# 沒有部署到 GitHub Pages 或其他主機的步驟。
-name: Build static site
+# 合併到 main 之後會建置並部署到 GitHub Pages。
+# 也可以在 Actions 頁面手動 Run workflow。
+# 這個檔案不會改倉庫的 Pages 設定；Source 仍要在 GitHub 上選 GitHub Actions。
+name: Deploy GitHub Pages
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -15,12 +26,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm run build
         env:
           VITE_BASE: /grokbot-office/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: dist
           path: dist
-          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

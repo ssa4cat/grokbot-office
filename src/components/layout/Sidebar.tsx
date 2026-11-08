@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentDetailPanel } from "@/components/panels/AgentDetailPanel";
-import { getProfile, staticOffice } from "@/data/layout-office";
+import { getProfile, linkAppearance, staticOffice } from "@/data/layout-office";
 import type { AgentVisualStatus } from "@/gateway/types";
 import { STATUS_COLORS } from "@/lib/constants";
 import { useOfficeStore } from "@/store/office-store";
@@ -33,8 +33,17 @@ export function Sidebar() {
   }, [agents, search, filter]);
 
   const nameOf = (id: string) => getProfile(id)?.name ?? id;
-  const flow = staticOffice.links.filter((link) => link.kind !== "return");
-  const returns = staticOffice.links.filter((link) => link.kind === "return");
+  const pipelineTitle = (pipeline: string) => {
+    if (pipeline === "slides") return t("sidebar.pipelineSlides");
+    if (pipeline === "article") return t("sidebar.pipelineArticle");
+    return pipeline;
+  };
+  const pipelineOrder = ["article", "slides"];
+  const pipelines = Array.from(new Set(staticOffice.links.map((link) => linkAppearance(link).pipeline))).sort((a, b) => {
+    const ai = pipelineOrder.indexOf(a);
+    const bi = pipelineOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
 
   if (collapsed) {
     return (
@@ -57,26 +66,39 @@ export function Sidebar() {
       <div className="flex-1 overflow-auto">
         <section className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
           <h2 className="text-xs font-semibold text-sky-700 dark:text-sky-300">{t("sidebar.pipeline")}</h2>
-          <ol className="mt-2 space-y-1">
-            {flow.map((link) => (
-              <li key={`${link.sourceId}-${link.targetId}`} className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-                <span className="mr-1 rounded bg-cyan-50 px-1 text-[10px] text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200">
-                  {t("sidebar.flow")}
-                </span>
-                {nameOf(link.sourceId)} → {nameOf(link.targetId)}
-                {link.label ? <span className="text-slate-400"> · {link.label}</span> : null}
-              </li>
-            ))}
-            {returns.map((link) => (
-              <li key={`${link.sourceId}-${link.targetId}-return`} className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-                <span className="mr-1 rounded bg-orange-50 px-1 text-[10px] text-orange-700 dark:bg-orange-950 dark:text-orange-200">
-                  {t("sidebar.return")}
-                </span>
-                {nameOf(link.sourceId)} → {nameOf(link.targetId)}
-                {link.label ? <span className="text-slate-400"> · {link.label}</span> : null}
-              </li>
-            ))}
-          </ol>
+          {pipelines.map((pipeline) => {
+            const items = staticOffice.links.filter((link) => linkAppearance(link).pipeline === pipeline);
+            const slides = pipeline === "slides";
+            return (
+              <div key={pipeline} className="mt-2">
+                <h3 className={`text-[11px] font-semibold ${slides ? "text-violet-700 dark:text-violet-300" : "text-cyan-700 dark:text-cyan-300"}`}>
+                  {pipelineTitle(pipeline)}
+                </h3>
+                <ol className="mt-1 space-y-1">
+                  {items.map((link) => {
+                    const returning = link.kind === "return";
+                    return (
+                      <li key={`${pipeline}-${link.sourceId}-${link.targetId}-${link.kind}`} className="text-xs leading-5 text-slate-600 dark:text-slate-300">
+                        <span
+                          className={`mr-1 rounded px-1 text-[10px] ${
+                            returning
+                              ? "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-200"
+                              : slides
+                                ? "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-200"
+                                : "bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200"
+                          }`}
+                        >
+                          {returning ? t("sidebar.return") : t("sidebar.flow")}
+                        </span>
+                        {nameOf(link.sourceId)} → {nameOf(link.targetId)}
+                        {link.label ? <span className="text-slate-400"> · {link.label}</span> : null}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            );
+          })}
         </section>
 
         <section className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">

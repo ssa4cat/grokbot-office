@@ -76,6 +76,16 @@
       "furnishing": "lab",
       "col": 3,
       "row": 1
+    },
+    {
+      "id": "slides",
+      "name": "簡報室",
+      "summary": "簡報架構、版型系統與數據圖表",
+      "accent": "#7c3aed",
+      "furnishing": "slides",
+      "col": 0,
+      "row": 2,
+      "colSpan": 4
     }
   ],
   "agents": [
@@ -97,7 +107,7 @@
       "status": "idle",
       "accent": "#6366f1",
       "accessory": "pencil",
-      "summary": "依資料寫出完整的部落格或專欄初稿。總編退稿時負責修改。"
+      "summary": "依資料寫出完整的部落格或專欄初稿。文章線交給總編；另一份內容交給簡報師做成簡報，兩條線分開走。"
     },
     {
       "id": "editor",
@@ -107,7 +117,7 @@
       "status": "idle",
       "accent": "#d97706",
       "accessory": "glasses",
-      "summary": "檢查錯字、文法與邏輯。不合格就退回筆桿，通過後送去畫室。"
+      "summary": "檢查錯字、文法與邏輯。文章不合格退回筆桿，通過後送畫室。簡報不合格則退回簡報師。"
     },
     {
       "id": "illustrator",
@@ -117,7 +127,7 @@
       "status": "idle",
       "accent": "#db2777",
       "accessory": "beret",
-      "summary": "為每一篇文章畫一張插圖，風格每次都可以不一樣。被退件就重畫。"
+      "summary": "為文章和簡報各畫需要的圖，風格可以不一樣。被退件就重畫。"
     },
     {
       "id": "artdirector",
@@ -127,7 +137,7 @@
       "status": "idle",
       "accent": "#7c3aed",
       "accessory": "cap",
-      "summary": "審核插圖。不通過就退回畫師重畫，通過後交給幕僚長整合。"
+      "summary": "審文章插圖，不通過退回畫師。審簡報裡的圖表，不通過退回簡報師。通過後交給幕僚長。"
     },
     {
       "id": "chief",
@@ -138,6 +148,16 @@
       "accent": "#fb923c",
       "accessory": "cape",
       "summary": "把目標拆成可執行的工作，分派給各專職機器人，做品質檢查，再交付整合後的成果。"
+    },
+    {
+      "id": "slides",
+      "name": "簡報師",
+      "role": "簡報",
+      "zone": "slides",
+      "status": "idle",
+      "accent": "#7c3aed",
+      "accessory": "pointer",
+      "summary": "把內容做成簡報檔（.pptx／Google Slides）。負責規劃架構、版型系統和數據圖表。總編或藝術總監退件時修改後再送出。"
     },
     {
       "id": "lumi",
@@ -161,12 +181,16 @@
     }
   ],
   "links": [
-    { "from": "researcher", "to": "writer", "kind": "flow", "label": "素材" },
-    { "from": "writer", "to": "editor", "kind": "flow", "label": "初稿" },
-    { "from": "editor", "to": "writer", "kind": "return", "label": "退稿" },
-    { "from": "editor", "to": "illustrator", "kind": "flow", "label": "定稿" },
-    { "from": "illustrator", "to": "artdirector", "kind": "flow", "label": "插圖" },
-    { "from": "artdirector", "to": "illustrator", "kind": "return", "label": "重畫" },
-    { "from": "artdirector", "to": "chief", "kind": "flow", "label": "交付" }
+    { "from": "researcher", "to": "writer", "kind": "flow", "pipeline": "article", "label": "素材" },
+    { "from": "writer", "to": "editor", "kind": "flow", "pipeline": "article", "label": "初稿" },
+    { "from": "editor", "to": "writer", "kind": "return", "pipeline": "article", "label": "退稿" },
+    { "from": "editor", "to": "illustrator", "kind": "flow", "pipeline": "article", "label": "定稿" },
+    { "from": "illustrator", "to": "artdirector", "kind": "flow", "pipeline": "article", "label": "插圖" },
+    { "from": "artdirector", "to": "illustrator", "kind": "return", "pipeline": "article", "label": "重畫" },
+    { "from": "artdirector", "to": "chief", "kind": "flow", "pipeline": "article", "label": "交付" },
+    { "from": "writer", "to": "slides", "kind": "flow", "pipeline": "slides", "label": "簡報稿" },
+    { "from": "slides", "to": "illustrator", "kind": "flow", "pipeline": "slides", "label": "配圖" },
+    { "from": "editor", "to": "slides", "kind": "return", "pipeline": "slides", "label": "退件" },
+    { "from": "artdirector", "to": "slides", "kind": "return", "pipeline": "slides", "label": "退件" }
   ]
 }

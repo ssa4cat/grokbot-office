@@ -23,11 +23,12 @@ const FURNISHINGS = [
   "command",
   "workstation",
   "lab",
+  "slides",
 ] as const;
 
 export type Furnishing = (typeof FURNISHINGS)[number];
 
-const ACCESSORIES = ["cape", "headset", "pencil", "glasses", "beret", "cap", "badge", "goggles"] as const;
+const ACCESSORIES = ["cape", "headset", "pencil", "glasses", "beret", "cap", "badge", "goggles", "pointer"] as const;
 
 export type Accessory = (typeof ACCESSORIES)[number];
 
@@ -61,6 +62,8 @@ export interface LinkInput {
   to: string;
   kind?: LinkKind;
   label?: string;
+  /** article stays on the desk arcs; slides uses the lower corridor so the two lines do not cross. */
+  pipeline?: string;
 }
 
 export interface TeamConfig {
@@ -271,10 +274,14 @@ export function parseTeam(input: unknown): TeamConfig {
     if (kindRaw !== "flow" && kindRaw !== "return") {
       throw new Error(`協作線 ${from} → ${to} 的 kind 只能是 flow 或 return。`);
     }
-    const key = `${from}->${to}:${kindRaw}`;
-    if (seenLinks.has(key)) throw new Error(`協作線 ${from} → ${to}（${kindRaw}）重複。`);
+    const pipeline = optString(item, "pipeline") ?? "article";
+    if (!/^[a-z][a-z0-9-]{0,24}$/.test(pipeline)) {
+      throw new Error(`協作線 ${from} → ${to} 的 pipeline「${pipeline}」請用小寫英文，例如 article 或 slides。`);
+    }
+    const key = `${from}->${to}:${kindRaw}:${pipeline}`;
+    if (seenLinks.has(key)) throw new Error(`協作線 ${from} → ${to}（${pipeline}／${kindRaw}）重複。`);
     seenLinks.add(key);
-    return { from, to, kind: kindRaw, label: optString(item, "label") ?? "" };
+    return { from, to, kind: kindRaw, pipeline, label: optString(item, "label") ?? "" };
   });
 
   return { office: { title, subtitle, columns }, zones, agents, links };
@@ -285,9 +292,9 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   const padding = 18;
   const headerHeight = 78;
   const gap = 12;
-  const amenityGap = 12;
+  const hasSouthLane = config.links.some((link) => link.pipeline === "slides");
+  const amenityGap = hasSouthLane ? 56 : 12;
   const amenityH = 112;
-  const cellH = 248;
   const targetWidth = 1440;
   const minCellW = 220;
   const maxCellW = 340;
@@ -352,6 +359,7 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   for (const draft of drafts.values()) {
     rowCount = Math.max(rowCount, draft.row + draft.rowSpan);
   }
+  const cellH = rowCount > 2 ? 210 : 248;
 
   const gridWidth = columns * cellW + Math.max(0, columns - 1) * gap;
   const width = padding * 2 + gridWidth;
@@ -466,8 +474,30 @@ export function buildRuntime(config: TeamConfig, layout: OfficeLayout): {
     lastActivityAt: 0,
     kind: link.kind ?? "flow",
     label: link.label ?? "",
+    pipeline: link.pipeline ?? "article",
   }));
   return { agents, links, profiles };
+}
+
+export function linkAppearance(link: { kind?: string; pipeline?: string }): {
+  pipeline: string;
+  color: string;
+  dashed: boolean;
+  curve: number;
+  corridor: boolean;
+} {
+  const pipeline = link.pipeline && link.pipeline.length > 0 ? link.pipeline : "article";
+  const returning = link.kind === "return";
+  if (pipeline === "slides") {
+    return { pipeline, color: returning ? "#e879f9" : "#7c3aed", dashed: returning, curve: -1, corridor: true };
+  }
+  return {
+    pipeline,
+    color: returning ? "#fb923c" : "#22d3ee",
+    dashed: returning,
+    curve: returning ? -1 : 1,
+    corridor: false,
+  };
 }
 
 function emptyLayout(): OfficeLayout {

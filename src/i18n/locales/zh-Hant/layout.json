@@ -14,6 +14,8 @@
   "sidebar": {
     "agents": "團隊",
     "pipeline": "內容產線",
+    "pipelineArticle": "文章線",
+    "pipelineSlides": "簡報線",
     "flow": "送件",
     "return": "退回",
     "agentDetail": "機器人",

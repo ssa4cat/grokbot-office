@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { getProfile, staticOffice } from "@/data/layout-office";
+import { getProfile, linkAppearance, staticOffice } from "@/data/layout-office";
 import { STATUS_COLORS } from "@/lib/constants";
 import { useOfficeStore } from "@/store/office-store";
 
@@ -54,9 +54,10 @@ export function AgentDetailPanel() {
                 const outgoing = link.sourceId === profile.id;
                 const other = getProfile(outgoing ? link.targetId : link.sourceId)?.name ?? (outgoing ? link.targetId : link.sourceId);
                 const verb = link.kind === "return" ? t("sidebar.return") : t("sidebar.flow");
+                const line = linkAppearance(link).pipeline === "slides" ? t("sidebar.pipelineSlides") : t("sidebar.pipelineArticle");
                 return (
-                  <div key={`${link.sourceId}-${link.targetId}-${link.kind}`}>
-                    {verb}
+                  <div key={`${link.pipeline}-${link.sourceId}-${link.targetId}-${link.kind}`}>
+                    {line} · {verb}
                     {outgoing ? ` → ${other}` : ` ← ${other}`}
                     {link.label ? `（${link.label}）` : ""}
                   </div>

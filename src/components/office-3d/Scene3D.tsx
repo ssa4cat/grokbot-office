@@ -2,7 +2,7 @@ import { Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
+import { linkAppearance, staticOffice, svgToWorld, WORLD_WIDTH, type PlacedZone } from "@/data/layout-office";
 import { useOfficeStore } from "@/store/office-store";
 import { AgentCharacter } from "./AgentCharacter";
 import { GrokRoom3D } from "./GrokRoom3D";
@@ -28,6 +28,63 @@ function BackgroundSync() {
   return null;
 }
 
+function arcPoints(x1: number, z1: number, x2: number, z2: number, curve: number): Array<[number, number, number]> {
+  const midX = (x1 + x2) / 2;
+  const midZ = (z1 + z2) / 2;
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const dist = Math.hypot(dx, dz) || 1;
+  const bend = curve * 0.35 * Math.min(dist, 2.4);
+  const bezier = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(x1, 0.35, z1),
+    new THREE.Vector3(midX - (dz / dist) * bend, 0.9, midZ + (dx / dist) * bend),
+    new THREE.Vector3(x2, 0.35, z2),
+  );
+  return bezier.getPoints(28).map((point) => [point.x, point.y, point.z]);
+}
+
+function corridorPoints(
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  sourceId: string,
+  targetId: string,
+  lane: number,
+): Array<[number, number, number]> {
+  const layout = staticOffice.layout;
+  const zoneOf = (id: string) => {
+    const seat = layout.seats.find((item) => item.agentId === id);
+    return layout.zones.find((zone) => zone.id === seat?.zoneId);
+  };
+  const sourceZone = zoneOf(sourceId);
+  const targetZone = zoneOf(targetId);
+  const lift = (x: number, y: number, height: number): [number, number, number] => {
+    const [wx, , wz] = svgToWorld({ x, y });
+    return [wx, height, wz];
+  };
+  if (!sourceZone || !targetZone) {
+    return [lift(source.x, source.y, 0.35), lift(target.x, target.y, 0.35)];
+  }
+  const gridRight = layout.amenity.x + layout.amenity.width;
+  const gutter = (zone: PlacedZone) => {
+    if (zone.width > gridRight * 0.7) return zone.x + 28;
+    const right = zone.x + zone.width + 6;
+    return right > gridRight - 2 ? zone.x - 6 : right;
+  };
+  const railY = layout.amenity.y - 42 + lane * 8;
+  const railHeight = 0.08 + lane * 0.05;
+  const exit = (zone: PlacedZone) => zone.y + zone.height - 12;
+  return [
+    lift(source.x, source.y, 0.35),
+    lift(source.x, exit(sourceZone), 0.2),
+    lift(gutter(sourceZone), exit(sourceZone), 0.2),
+    lift(gutter(sourceZone), railY, railHeight),
+    lift(gutter(targetZone), railY, railHeight),
+    lift(gutter(targetZone), exit(targetZone), 0.2),
+    lift(target.x, exit(targetZone), 0.2),
+    lift(target.x, target.y, 0.35),
+  ];
+}
+
 function CollabLines() {
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
@@ -39,21 +96,15 @@ function CollabLines() {
       if (!source || !target) return [];
       const [x1, , z1] = svgToWorld(source.position);
       const [x2, , z2] = svgToWorld(target.position);
-      const returning = link.kind === "return";
-      const midX = (x1 + x2) / 2;
-      const midZ = (z1 + z2) / 2;
-      const dx = x2 - x1;
-      const dz = z2 - z1;
-      const dist = Math.hypot(dx, dz) || 1;
-      const bend = (returning ? -0.35 : 0.35) * Math.min(dist, 2.4);
-      const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(x1, 0.35, z1),
-        new THREE.Vector3(midX - (dz / dist) * bend, 0.9, midZ + (dx / dist) * bend),
-        new THREE.Vector3(x2, 0.35, z2),
-      );
-      const points = curve.getPoints(28).map((point) => [point.x, point.y, point.z] as [number, number, number]);
-      const tip = curve.getPoint(0.9);
-      return [{ key: `${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`, points, color: returning ? "#fb923c" : "#22d3ee", dashed: returning, tip }];
+      const look = linkAppearance(link);
+      const lane = staticOffice.links
+        .filter((item) => linkAppearance(item).corridor)
+        .findIndex((item) => item.sourceId === link.sourceId && item.targetId === link.targetId && item.kind === link.kind);
+      const points = look.corridor
+        ? corridorPoints(source.position, target.position, link.sourceId, link.targetId, Math.max(0, lane))
+        : arcPoints(x1, z1, x2, z2, look.curve);
+      const tip = points[Math.min(points.length - 1, Math.floor(points.length * 0.9))] ?? points[points.length - 1];
+      return [{ key: `${look.pipeline}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`, points, color: look.color, dashed: look.dashed, tip: { x: tip[0], y: tip[1], z: tip[2] } }];
     });
   }, [agents, links]);
 

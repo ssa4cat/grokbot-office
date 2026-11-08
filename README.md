@@ -28,19 +28,37 @@ npm run preview
 
 `npm run build` 會做型別檢查，並把靜態網站輸出到 `dist/`。
 
-## 放在子路徑（例如 GitHub Pages）
+## 放在子路徑
 
-預設的 Vite `base` 是相對路徑 `./`。這樣 `dist/` 裡的 JS 與 CSS 會用相對網址，放在網站根目錄或 `/grokbot-office/` 這類子路徑都可以開。路由使用 hash（`#/`），不需要伺服器重寫。
+預設的 Vite `base` 是相對路徑 `./`。這樣 `dist/` 裡的 JS 與 CSS 會用相對網址，放在網站根目錄或子路徑都可以開。路由使用 hash（`#/`），不需要伺服器重寫。
 
-若要改成絕對路徑，建置時帶環境變數：
+本機若要模擬 GitHub Pages 的絕對路徑：
 
 ```bash
 VITE_BASE=/grokbot-office/ npm run build
+npm run preview
 ```
 
-開頭要有 `/`，結尾也要有 `/`。本機預覽時就要打開 `http://localhost:5180/grokbot-office/`。
+開頭要有 `/`，結尾也要有 `/`。預覽網址是 `http://localhost:5180/grokbot-office/`。
 
-**還沒有開啟 GitHub Pages，也沒有會自動發布的 workflow。** `.github/workflows/build.yml` 只能在 GitHub 上手動按 Run workflow 才會跑，而且只把 `dist/` 留成 Actions 產物，不會部署到任何地方。要不要公開由擁有者之後決定。
+## GitHub Pages
+
+公開網址：<https://ssa4cat.github.io/grokbot-office/>
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) 會在兩種情況部署：
+
+- push 到 `main`（合併進主分支之後）
+- 在 GitHub Actions 頁面手動 Run workflow
+
+它使用官方的 `actions/configure-pages`、`actions/upload-pages-artifact`、`actions/deploy-pages`，建置時設定 `VITE_BASE=/grokbot-office/`。權限是 `contents: read`、`pages: write`、`id-token: write`。
+
+合併之後，倉庫還要自己打開 Pages，這個變更不會改 GitHub 設定：
+
+1. 打開倉庫 **Settings → Pages**。
+2. **Build and deployment → Source** 選 **GitHub Actions**（不要選 Deploy from a branch）。
+3. 等 `Deploy GitHub Pages` 這支 workflow 成功。第一次成功之後，上面的網址才會打開。
+
+若組織限制了 Actions 的部署權限，要允許這個倉庫用 GitHub Actions 部署到 Pages。
 
 ## 怎麼加一個機器人
 
@@ -70,7 +88,7 @@ VITE_BASE=/grokbot-office/ npm run build
 | `role` | 否 | 職稱，顯示在名字旁邊。 |
 | `status` | 否 | 預設 `idle`。可用 `idle`、`thinking`、`tool_calling`、`speaking`、`spawning`、`error`、`offline`。目前不會自己變，改檔案才會變。 |
 | `accent` | 否 | 天線、披風這類配色，CSS 顏色。 |
-| `accessory` | 否 | `cape`、`headset`、`pencil`、`glasses`、`beret`、`cap`、`badge`、`goggles`。 |
+| `accessory` | 否 | `cape`、`headset`、`pencil`、`glasses`、`beret`、`cap`、`badge`、`goggles`、`pointer`（簡報筆）。 |
 
 同一區可以放多個機器人，會並排。
 
@@ -94,7 +112,7 @@ VITE_BASE=/grokbot-office/ npm run build
 | --- | --- |
 | `col` / `row` | 欄與列。寫了其中一個就算指定位置。 |
 | `colSpan` / `rowSpan` | 佔幾格，預設 1。 |
-| `furnishing` | 家具。可用 `desk`、`research`、`writing`、`editing`、`studio`、`review`、`command`、`workstation`、`lab`。不填就是普通桌子。 |
+| `furnishing` | 家具。可用 `desk`、`research`、`writing`、`editing`、`studio`、`review`、`command`、`workstation`、`lab`、`slides`。不填就是普通桌子。 |
 
 `office.columns` 是每一列有幾欄，預設 4，範圍 1 到 8。區域變多時會自動多一列，畫面跟著變高。
 
@@ -106,16 +124,15 @@ VITE_BASE=/grokbot-office/ npm run build
 
 `links` 的 `from` / `to` 都是機器人 `id`。
 
-- `kind: "flow"`：青色，表示往下交件。
-- `kind: "return"`：橘色虛線，表示退回重做。
+- `kind: "flow"`：往下交件。
+- `kind: "return"`：虛線，退回重做。
+- `pipeline`：哪一條產線。不填是 `article`（文章線，畫在工位之間）。`slides` 是簡報線，改走辦公室下方的通道，不會穿過文章區。
 
-目前的內容產線是：
+文章線：資料蒐集員 → 筆桿 → 總編 → 畫師 → 藝術總監 → 幕僚長。退回是總編 → 筆桿、藝術總監 → 畫師。
 
-資料蒐集員 → 筆桿 → 總編 → 畫師 → 藝術總監 → 幕僚長
+簡報線和文章線分開：筆桿 → 簡報師 → 畫師。退件是總編 → 簡報師、藝術總監 → 簡報師。簡報師做的是 `.pptx`／Google Slides，包含架構、版型系統和數據圖表，人在簡報室。
 
-退回兩條：總編 → 筆桿、藝術總監 → 畫師。
-
-Lumi 和 dr eggbot 不在這條產線上。Lumi 是通用助理；dr eggbot 在團隊要擴編、需要新機器人時才上場。若要讓他們連上某人，在 `links` 加一筆即可。
+Lumi 和 dr eggbot 不在這兩條線上。Lumi 是通用助理；dr eggbot 在團隊要擴編、需要新機器人時才上場。若要讓他們連上某人，在 `links` 加一筆即可。
 
 ## 已知限制
 

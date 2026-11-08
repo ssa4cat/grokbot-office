@@ -171,6 +171,8 @@ export interface CollaborationLink {
   /** flow = handoff along the pipeline, return = send-back loop */
   kind?: "flow" | "return";
   label?: string;
+  /** Which content line this handoff belongs to, for example article or slides. */
+  pipeline?: string;
 }
 
 export interface EventHistoryItem {

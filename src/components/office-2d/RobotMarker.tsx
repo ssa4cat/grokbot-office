@@ -93,6 +93,12 @@ export function RobotMarker({
       {accessory === "headset" && (
         <path d="M -14 -48 Q 0 -64 14 -48" fill="none" stroke={accent} strokeWidth={2} />
       )}
+      {accessory === "pointer" && (
+        <g transform="rotate(-20)">
+          <rect x={12} y={-16} width={4} height={14} rx={1} fill="#1e293b" />
+          <circle cx={14} cy={-18} r={2.2} fill={accent} />
+        </g>
+      )}
 
       <line x1={0} y1={-52} x2={0} y2={-60} stroke="#94a3b8" strokeWidth={1.4} />
       <circle cx={0} cy={-62} r={3.1} fill={accent} />

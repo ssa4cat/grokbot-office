@@ -41,6 +41,9 @@
     "agentDetail": "Agent Detail",
     "eventTimeline": "Event Timeline",
     "searchPlaceholder": "Search agents...",
+    "pipeline": "Pipelines",
+    "pipelineArticle": "Article line",
+    "pipelineSlides": "Slides line",
     "filters": {
       "all": "All",
       "active": "Active",

@@ -26,6 +26,7 @@ describe("team config layout", () => {
     const runtime = buildRuntime(config, layout);
     expect(runtime.links).toHaveLength(1);
     expect(runtime.links[0]?.kind).toBe("flow");
+    expect(runtime.links[0]?.pipeline).toBe("article");
     expect(runtime.profiles.find((profile) => profile.id === "newbie")?.zoneName).toBe("archive");
   });
 

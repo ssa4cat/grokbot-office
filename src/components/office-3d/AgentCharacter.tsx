@@ -184,5 +184,13 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
       </mesh>
     );
   }
+  if (accessory === "pointer") {
+    return (
+      <mesh position={[0.18, 0.4, 0.08]} rotation={[0.5, 0, 0.4]}>
+        <boxGeometry args={[0.02, 0.14, 0.02]} />
+        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
+      </mesh>
+    );
+  }
   return null;
 }

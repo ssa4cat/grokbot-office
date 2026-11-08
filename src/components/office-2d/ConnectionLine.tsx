@@ -9,6 +9,8 @@ interface ConnectionLineProps {
   color?: string;
   curve?: number;
   dashed?: boolean;
+  /** Extra corners between the endpoints. Used by the slides corridor. */
+  waypoints?: Array<{ x: number; y: number }>;
 }
 
 export function ConnectionLine({
@@ -20,6 +22,7 @@ export function ConnectionLine({
   color = "#38bdf8",
   curve = 1,
   dashed = false,
+  waypoints,
 }: ConnectionLineProps) {
   const rawId = useId().replace(/:/g, "");
   const dx = x2 - x1;
@@ -27,12 +30,17 @@ export function ConnectionLine({
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (!Number.isFinite(dist) || dist < 1) return null;
 
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-  const offset = Math.min(dist * 0.22, 64) * curve;
-  const cx = midX - (dy / dist) * offset;
-  const cy = midY + (dx / dist) * offset;
-  const pathData = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+  let pathData: string;
+  if (waypoints && waypoints.length > 0) {
+    pathData = `M ${x1} ${y1} ${waypoints.map((point) => `L ${point.x} ${point.y}`).join(" ")} L ${x2} ${y2}`;
+  } else {
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    const offset = Math.min(dist * 0.22, 64) * curve;
+    const cx = midX - (dy / dist) * offset;
+    const cy = midY + (dx / dist) * offset;
+    pathData = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+  }
   const opacity = Math.max(0.55, Math.min(1, strength));
   const markerId = `arrow-${rawId}`;
 

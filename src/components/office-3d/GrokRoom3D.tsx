@@ -99,7 +99,13 @@ function Zone3D({ zone, dark }: { zone: PlacedZone; dark: boolean }) {
       <Html position={[lx, 0.05, lz]} center style={{ pointerEvents: "none" }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: zone.accent, whiteSpace: "nowrap" }}>{zone.name}</div>
       </Html>
-      {zone.furnishing === "command" ? <CommandPad position={[dx, 0, dz]} accent={zone.accent} /> : <DeskSet position={[dx, 0, dz]} accent={zone.accent} kind={zone.furnishing} dark={dark} />}
+      {zone.furnishing === "command" ? (
+        <CommandPad position={[dx, 0, dz]} accent={zone.accent} />
+      ) : zone.furnishing === "slides" ? (
+        <SlideDeck position={[dx, 0, dz]} accent={zone.accent} />
+      ) : (
+        <DeskSet position={[dx, 0, dz]} accent={zone.accent} kind={zone.furnishing} dark={dark} />
+      )}
       <Plant3D position={[px, 0, pz]} />
     </group>
   );
@@ -147,6 +153,25 @@ function DeskSet({
           <meshStandardMaterial color="#fff" emissive={accent} emissiveIntensity={0.25} />
         </mesh>
       )}
+    </group>
+  );
+}
+
+function SlideDeck({ position, accent }: { position: [number, number, number]; accent: string }) {
+  return (
+    <group position={position}>
+      <mesh position={[-1.4, 0.85, 0]} castShadow>
+        <boxGeometry args={[1.8, 1.05, 0.04]} />
+        <meshStandardMaterial color="#0f172a" />
+      </mesh>
+      <mesh position={[-1.4, 0.85, 0.03]}>
+        <planeGeometry args={[1.6, 0.88]} />
+        <meshStandardMaterial color="#f5f3ff" emissive={accent} emissiveIntensity={0.35} />
+      </mesh>
+      <mesh position={[1.15, 0.55, 0]}>
+        <boxGeometry args={[0.9, 0.6, 0.03]} />
+        <meshStandardMaterial color="#faf5ff" emissive={accent} emissiveIntensity={0.2} />
+      </mesh>
     </group>
   );
 }
