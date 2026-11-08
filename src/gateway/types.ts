@@ -286,6 +286,13 @@ export interface OfficeStore {
   moveToMeeting: (agentId: string, meetingPosition: { x: number; y: number }) => void;
   returnFromMeeting: (agentId: string) => void;
 
+  // In-browser demo. Does not talk to a gateway.
+  dynamicDisplay: boolean;
+  activeHandoff: { sourceId: string; targetId: string } | null;
+  setDynamicDisplay: (on: boolean) => void;
+  setActiveHandoff: (link: { sourceId: string; targetId: string } | null) => void;
+  followPath: (agentId: string, path: Array<{ x: number; y: number }>, duration?: number) => void;
+
   // Walking animation
   startMovement: (agentId: string, toZone: AgentZone, targetPos?: { x: number; y: number }) => void;
   tickMovement: (agentId: string, deltaTime: number) => void;

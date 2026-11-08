@@ -5,7 +5,8 @@
     "reconnecting": "重新連線",
     "disconnected": "未連線",
     "error": "連線錯誤",
-    "static": "靜態展示"
+    "static": "靜態展示",
+    "dynamic": "動態展示"
   },
   "empty": {
     "noMatchingAgents": "沒有符合的機器人"

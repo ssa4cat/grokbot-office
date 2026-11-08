@@ -1,253 +1,433 @@
 import { Html } from "@react-three/drei";
-import { staticOffice, svgToWorld, type Furnishing, type PlacedZone } from "@/data/layout-office";
+import { staticOffice, svgToWorld, type PlacedZone } from "@/data/layout-office";
 import type { ThemeMode } from "@/gateway/types";
+import {
+  BookShelf,
+  Chair,
+  CoffeeMachine,
+  CorkBoard,
+  Desk,
+  Easel,
+  FilingCabinet,
+  FloorLamp,
+  Monitor,
+  Plant,
+  RobotArm,
+  Sofa,
+} from "./furniture";
+import { Block } from "./furniture";
+import { boundaryToward, commandCenter, standPoint, walkSegments } from "./walkways";
+
+const RUG: Record<string, string> = {
+  research: "#CDE8F2",
+  writing: "#D9DCF7",
+  editing: "#F8E3C2",
+  studio: "#F7D3DD",
+  review: "#E2D6F2",
+  command: "#CFEFEA",
+  workstation: "#D6EFDD",
+  lab: "#F5D5D5",
+  slides: "#E4DAF3",
+};
 
 const layout = staticOffice.layout;
 
-function worldSize(width: number, height: number): [number, number] {
-  return [(width / layout.width) * 18, (height / layout.height) * layout.worldDepth];
+function at(x: number, y: number, lift = 0): [number, number, number] {
+  const [wx, , wz] = svgToWorld({ x, y });
+  return [wx, lift, wz];
+}
+
+function worldLen(px: number): number {
+  return (px / layout.width) * 18;
 }
 
 export function GrokRoom3D({ theme }: { theme: ThemeMode }) {
   const dark = theme === "dark";
-  const floor = dark ? "#1e293b" : "#f4f8fc";
-  const wall = dark ? "#243044" : "#f8fbff";
-  const depth = layout.worldDepth;
-  const width = 18;
+  const [floorX, , floorZ] = at(layout.width / 2, layout.height / 2);
+  const floorW = 18.6;
+  const floorD = (layout.height / layout.width) * 18 + 1.2;
+  const wall = dark ? "#2a2826" : "#F4F1EC";
 
   return (
     <group>
-      <hemisphereLight args={[dark ? "#7dd3fc" : "#e0f2fe", dark ? "#44403c" : "#fff7ed", dark ? 0.45 : 0.85]} />
-      <ambientLight intensity={dark ? 0.35 : 0.55} color="#ffffff" />
+      <hemisphereLight args={["#FFF6E8", "#D8CBB8", 0.6]} />
+      <ambientLight intensity={0.22} color="#FFF6E8" />
       <directionalLight
-        position={[8, 16, 10]}
-        intensity={dark ? 0.8 : 1.25}
+        position={[-10, 14, 8]}
+        intensity={0.8}
+        color="#FFFFFF"
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={1}
         shadow-camera-far={40}
-        shadow-camera-left={-14}
-        shadow-camera-right={14}
+        shadow-camera-left={-16}
+        shadow-camera-right={16}
         shadow-camera-top={14}
         shadow-camera-bottom={-14}
-        color="#fffaf3"
+        shadow-bias={-0.0008}
       />
-      <pointLight position={[width / 2, 2.2, 0.6]} intensity={1.4} color="#7dd3fc" distance={10} />
+      <directionalLight position={[2, 6, -6]} intensity={0.35} color="#FFE2B8" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[width / 2, -0.06, depth / 2]} receiveShadow>
-        <planeGeometry args={[width + 6, depth + 6]} />
-        <meshStandardMaterial color={dark ? "#0f172a" : "#dbeafe"} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[floorX, 0, floorZ]} receiveShadow>
+        <planeGeometry args={[floorW, floorD]} />
+        <meshLambertMaterial color={dark ? "#3a342c" : "#E8D9C4"} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[width / 2, 0, depth / 2]} receiveShadow>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color={floor} roughness={0.85} />
+      <mesh position={[floorX, 0.04, floorZ - floorD / 2]} receiveShadow>
+        <boxGeometry args={[floorW, 0.08, 0.08]} />
+        <meshLambertMaterial color="#CDBBA2" />
       </mesh>
 
-      <mesh position={[width / 2, 1.35, 0.08]} castShadow>
-        <boxGeometry args={[width, 2.7, 0.12]} />
-        <meshStandardMaterial color={wall} />
+      <mesh position={[floorX, 1.25, 0.06]} castShadow receiveShadow>
+        <boxGeometry args={[floorW, 2.5, 0.12]} />
+        <meshLambertMaterial color={wall} />
       </mesh>
-      <mesh position={[0.06, 1.35, depth / 2]}>
-        <boxGeometry args={[0.12, 2.7, depth]} />
-        <meshStandardMaterial color={wall} />
+      <mesh position={[0.04, 1.25, floorZ]} castShadow receiveShadow>
+        <boxGeometry args={[0.12, 2.5, floorD]} />
+        <meshLambertMaterial color={wall} />
       </mesh>
       {Array.from({ length: 5 }).map((_, index) => (
-        <mesh key={`window-${index}`} position={[2.2 + index * 3.1, 1.7, 0.16]}>
-          <planeGeometry args={[2.1, 1.15]} />
-          <meshStandardMaterial color="#b9e6ff" emissive="#7dd3fc" emissiveIntensity={dark ? 0.35 : 0.55} />
+        <mesh key={index} position={[1.8 + index * 3.2, 1.65, 0.14]}>
+          <planeGeometry args={[2.0, 1.05]} />
+          <meshLambertMaterial color="#D7E8F5" emissive="#FFE2B8" emissiveIntensity={0.18} />
         </mesh>
       ))}
-      <mesh position={[width / 2, 2.55, 0.18]}>
-        <boxGeometry args={[width * 0.46, 0.06, 0.04]} />
-        <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={0.8} />
-      </mesh>
-      <Html position={[width / 2, 2.15, 0.24]} center style={{ pointerEvents: "none" }}>
-        <div
-          style={{
-            fontWeight: 800,
-            letterSpacing: "0.28em",
-            fontSize: 22,
-            color: dark ? "#e0f2fe" : "#0369a1",
-            textShadow: "0 0 12px rgba(34,211,238,0.85)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {layout.title}
-        </div>
+      <Html position={[floorW * 0.55, 2.15, 0.2]} center style={{ pointerEvents: "none" }}>
+        <div style={{ fontWeight: 800, letterSpacing: "0.22em", fontSize: 18, color: "#0369a1" }}>{layout.title}</div>
+      </Html>
+      <Html position={[floorW * 0.22, 1.7, 0.2]} center style={{ pointerEvents: "none" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#6b6258" }}>09:41</div>
       </Html>
 
-      {layout.zones.map((zone) => (
-        <Zone3D key={zone.id} zone={zone} dark={dark} />
+      {walkSegments().map((segment, index) => (
+        <WalkStrip key={index} a={segment.a} b={segment.b} width={segment.width} />
       ))}
-      <Amenity3D dark={dark} />
+
+      {layout.zones.map((zone) => (
+        <ZoneRoom key={zone.id} zone={zone} />
+      ))}
+      <Lounge />
     </group>
   );
 }
 
-function Zone3D({ zone, dark }: { zone: PlacedZone; dark: boolean }) {
-  const [cx, , cz] = svgToWorld({ x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 });
-  const [zw, zd] = worldSize(zone.width - 8, zone.height - 8);
-  const [dx, , dz] = svgToWorld({ x: zone.x + zone.width / 2, y: zone.y + zone.height * 0.46 });
-  const [lx, , lz] = svgToWorld({ x: zone.x + 36, y: zone.y + 28 });
-  const [px, , pz] = svgToWorld({ x: zone.x + zone.width - 28, y: zone.y + zone.height - 30 });
+function WalkStrip({ a, b, width }: { a: { x: number; y: number }; b: { x: number; y: number }; width: number }) {
+  const [ax, , az] = svgToWorld(a);
+  const [bx, , bz] = svgToWorld(b);
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return null;
+  return (
+    <mesh position={[(ax + bx) / 2, 0.03, (az + bz) / 2]} rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]} receiveShadow>
+      <planeGeometry args={[len, worldLen(width)]} />
+      <meshLambertMaterial color="#F1E6D6" />
+    </mesh>
+  );
+}
 
+function ZoneRoom({ zone }: { zone: PlacedZone }) {
+  const rug = RUG[zone.id] ?? "#E7E1D8";
+  const [cx, , cz] = svgToWorld({ x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 });
+  const w = worldLen(zone.width - 10);
+  const d = (zone.height / layout.width) * 18;
+  const sign = at(zone.x + 36, zone.y + 22, 0.46);
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0.012, cz]} receiveShadow>
-        <planeGeometry args={[zw, zd]} />
-        <meshStandardMaterial color={zone.accent} transparent opacity={dark ? 0.22 : 0.14} />
+        <planeGeometry args={[w, d]} />
+        <meshLambertMaterial color={rug} />
       </mesh>
-      <Html position={[lx, 0.05, lz]} center style={{ pointerEvents: "none" }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: zone.accent, whiteSpace: "nowrap" }}>{zone.name}</div>
+      <ZoneWalls zone={zone} />
+      <Html position={sign} center style={{ pointerEvents: "none" }}>
+        <div
+          style={{
+            background: rug,
+            color: "#3f3a34",
+            fontSize: 11,
+            fontWeight: 800,
+            padding: "2px 6px",
+            borderRadius: 4,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {zone.name}
+        </div>
       </Html>
-      {zone.furnishing === "command" ? (
-        <CommandPad position={[dx, 0, dz]} accent={zone.accent} />
-      ) : zone.furnishing === "slides" ? (
-        <SlideDeck position={[dx, 0, dz]} accent={zone.accent} />
-      ) : (
-        <DeskSet position={[dx, 0, dz]} accent={zone.accent} kind={zone.furnishing} dark={dark} />
-      )}
-      <Plant3D position={[px, 0, pz]} />
+      <ZoneKit zone={zone} />
+      <Plant position={at(zone.x + zone.width - 28, zone.y + 30)} scale={zone.id === "slides" ? 1.35 : 1} />
     </group>
   );
 }
 
-function DeskSet({
-  position,
-  accent,
-  kind,
-  dark,
-}: {
-  position: [number, number, number];
-  accent: string;
-  kind: Furnishing;
-  dark: boolean;
-}) {
-  return (
-    <group position={position}>
-      <mesh position={[0, 0.38, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.35, 0.06, 0.7]} />
-        <meshStandardMaterial color={dark ? "#334155" : "#ffffff"} roughness={0.45} />
-      </mesh>
-      {[
-        [-0.58, 0.18, -0.28],
-        [0.58, 0.18, -0.28],
-        [-0.58, 0.18, 0.28],
-        [0.58, 0.18, 0.28],
-      ].map((leg) => (
-        <mesh key={leg.join(",")} position={leg as [number, number, number]}>
-          <boxGeometry args={[0.05, 0.36, 0.05]} />
-          <meshStandardMaterial color="#cbd5e1" metalness={0.4} roughness={0.3} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.78, -0.18]} castShadow>
-        <boxGeometry args={[0.72, 0.42, 0.03]} />
-        <meshStandardMaterial color="#0f172a" />
-      </mesh>
-      <mesh position={[0, 0.78, -0.155]}>
-        <planeGeometry args={[0.64, 0.34]} />
-        <meshStandardMaterial color="#e0f2fe" emissive={accent} emissiveIntensity={0.55} />
-      </mesh>
-      {kind === "lab" && (
-        <mesh position={[0.55, 0.52, 0.05]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color="#fff" emissive={accent} emissiveIntensity={0.25} />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-function SlideDeck({ position, accent }: { position: [number, number, number]; accent: string }) {
-  return (
-    <group position={position}>
-      <mesh position={[-1.4, 0.85, 0]} castShadow>
-        <boxGeometry args={[1.8, 1.05, 0.04]} />
-        <meshStandardMaterial color="#0f172a" />
-      </mesh>
-      <mesh position={[-1.4, 0.85, 0.03]}>
-        <planeGeometry args={[1.6, 0.88]} />
-        <meshStandardMaterial color="#f5f3ff" emissive={accent} emissiveIntensity={0.35} />
-      </mesh>
-      <mesh position={[1.15, 0.55, 0]}>
-        <boxGeometry args={[0.9, 0.6, 0.03]} />
-        <meshStandardMaterial color="#faf5ff" emissive={accent} emissiveIntensity={0.2} />
-      </mesh>
-    </group>
-  );
-}
-
-function CommandPad({ position, accent }: { position: [number, number, number]; accent: string }) {
-  return (
-    <group position={position}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0.35]}>
-        <ringGeometry args={[0.28, 0.48, 32]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
-      </mesh>
-      <mesh position={[0, 0.95, -0.15]}>
-        <planeGeometry args={[0.85, 0.62]} />
-        <meshStandardMaterial color="#ecfeff" emissive="#67e8f9" emissiveIntensity={0.7} transparent opacity={0.92} side={2} />
-      </mesh>
-    </group>
-  );
-}
-
-function Plant3D({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      <mesh position={[0, 0.08, 0]}>
-        <cylinderGeometry args={[0.07, 0.09, 0.16, 8]} />
-        <meshStandardMaterial color="#e7c3a0" />
-      </mesh>
-      <mesh position={[0, 0.26, 0]}>
-        <sphereGeometry args={[0.14, 12, 12]} />
-        <meshStandardMaterial color="#4ade80" />
-      </mesh>
-      <mesh position={[0.08, 0.32, 0.02]}>
-        <sphereGeometry args={[0.09, 10, 10]} />
-        <meshStandardMaterial color="#16a34a" />
-      </mesh>
-    </group>
-  );
-}
-
-function Amenity3D({ dark }: { dark: boolean }) {
-  const amenity = layout.amenity;
-  const [sx, , sz] = svgToWorld({ x: amenity.x + 110, y: amenity.y + amenity.height * 0.62 });
-  const [cx, , cz] = svgToWorld({ x: amenity.x + amenity.width - 160, y: amenity.y + amenity.height * 0.62 });
+function ZoneWalls({ zone }: { zone: PlacedZone }) {
+  const door = boundaryToward(zone, commandCenter());
+  const center = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
+  const openX = Math.abs(door.x - center.x) > Math.abs(door.y - center.y);
+  const openPositive = openX ? door.x > center.x : door.y > center.y;
+  const [x0, , z0] = svgToWorld({ x: zone.x, y: zone.y });
+  const [x1, , z1] = svgToWorld({ x: zone.x + zone.width, y: zone.y + zone.height });
+  const minX = Math.min(x0, x1);
+  const maxX = Math.max(x0, x1);
+  const minZ = Math.min(z0, z1);
+  const maxZ = Math.max(z0, z1);
+  const h = 0.3;
+  const t = 0.07;
+  const walls: Array<{ pos: [number, number, number]; size: [number, number, number] }> = [];
+  const span = (full: number, gap: boolean) => (gap ? full * 0.34 : full);
+  const pushEdge = (axis: "x" | "z", atEdge: number, positive: boolean) => {
+    const gap = (axis === "x") === openX && positive === openPositive;
+    if (axis === "z") {
+      const full = maxX - minX;
+      const length = span(full, gap);
+      const shift = gap ? (full * 0.3) : 0;
+      walls.push({ pos: [minX + full / 2 - shift, h / 2, atEdge], size: [length, h, t] });
+      if (gap) walls.push({ pos: [minX + full / 2 + shift, h / 2, atEdge], size: [length, h, t] });
+    } else {
+      const full = maxZ - minZ;
+      const length = span(full, gap);
+      const shift = gap ? full * 0.3 : 0;
+      walls.push({ pos: [atEdge, h / 2, minZ + full / 2 - shift], size: [t, h, length] });
+      if (gap) walls.push({ pos: [atEdge, h / 2, minZ + full / 2 + shift], size: [t, h, length] });
+    }
+  };
+  pushEdge("z", minZ, false);
+  pushEdge("z", maxZ, true);
+  pushEdge("x", minX, false);
+  pushEdge("x", maxX, true);
   return (
     <group>
-      <group position={[sx, 0, sz]}>
-        <mesh position={[0, 0.22, 0]} castShadow>
-          <boxGeometry args={[1.3, 0.28, 0.5]} />
-          <meshStandardMaterial color={dark ? "#44403c" : "#ffffff"} />
+      {walls.map((wall, index) => (
+        <mesh key={index} position={wall.pos} castShadow receiveShadow>
+          <boxGeometry args={wall.size} />
+          <meshLambertMaterial color="#F4F1EC" />
         </mesh>
-        <mesh position={[0, 0.42, -0.18]}>
-          <boxGeometry args={[1.3, 0.28, 0.12]} />
-          <meshStandardMaterial color={dark ? "#57534e" : "#fff7ed"} />
-        </mesh>
-        <mesh position={[-0.28, 0.38, 0.02]}>
-          <boxGeometry args={[0.36, 0.08, 0.32]} />
-          <meshStandardMaterial color="#fb923c" />
-        </mesh>
-        <mesh position={[0.28, 0.38, 0.02]}>
-          <boxGeometry args={[0.36, 0.08, 0.32]} />
-          <meshStandardMaterial color="#fdba74" />
+      ))}
+    </group>
+  );
+}
+
+function ZoneKit({ zone }: { zone: PlacedZone }) {
+  const midX = zone.x + zone.width / 2;
+  const deskY = zone.y + zone.height * 0.4;
+  const backY = zone.y + 34;
+  if (zone.id === "slides") return <SlidesRoom zone={zone} />;
+  if (zone.id === "command") return <CommandRoom zone={zone} />;
+  if (zone.id === "research") {
+    return (
+      <group>
+        <Desk position={at(midX - 28, deskY)} />
+        <Desk position={at(midX + 36, deskY)} size={[0.7, 0.08, 0.55]} />
+        <Monitor position={at(midX - 36, deskY - 8, 0.75)} />
+        <Monitor position={at(midX - 8, deskY - 8, 0.75)} />
+        <FilingCabinet position={at(zone.x + 36, backY)} />
+        <FilingCabinet position={at(zone.x + 78, backY)} />
+        <FilingCabinet position={at(zone.x + 120, backY)} />
+        <Globe position={at(midX + 48, deskY, 0.82)} />
+      </group>
+    );
+  }
+  if (zone.id === "writing") {
+    return (
+      <group>
+        <Desk position={at(midX, deskY)} />
+        <Monitor position={at(midX, deskY - 6, 0.75)} wide />
+        <BookShelf position={at(zone.x + zone.width - 48, backY + 10)} />
+        <Block position={at(midX + 28, deskY, 0.8)} size={[0.16, 0.04, 0.12]} color="#F4F1EC" />
+        <mesh position={at(midX - 24, deskY, 0.84)}>
+          <cylinderGeometry args={[0.04, 0.035, 0.08, 8]} />
+          <meshLambertMaterial color="#F7D3DD" />
         </mesh>
       </group>
-      <group position={[cx, 0, cz]}>
-        <mesh position={[0, 0.42, 0]} castShadow>
-          <boxGeometry args={[1.5, 0.7, 0.45]} />
-          <meshStandardMaterial color={dark ? "#292524" : "#fff"} />
+    );
+  }
+  if (zone.id === "editing") {
+    return (
+      <group>
+        <Desk position={at(midX, deskY)} size={[1.35, 0.08, 0.66]} />
+        <Block position={at(midX - 10, deskY, 0.82)} size={[0.22, 0.08, 0.16]} color="#F4F1EC" />
+        <mesh position={at(midX + 16, deskY, 0.84)} rotation={[0, 0, 0.6]}>
+          <cylinderGeometry args={[0.012, 0.012, 0.16, 6]} />
+          <meshLambertMaterial color="#E11D48" />
         </mesh>
-        <mesh position={[-0.4, 0.82, 0]}>
-          <boxGeometry args={[0.28, 0.22, 0.22]} />
-          <meshStandardMaterial color="#44403c" />
+        <CorkBoard position={at(midX, backY, 0.7)} />
+        <Block position={at(zone.x + 28, deskY + 20, 0.12)} size={[0.22, 0.16, 0.22]} color="#F8E3C2" />
+        <Block position={at(zone.x + zone.width - 28, deskY + 20, 0.12)} size={[0.22, 0.16, 0.22]} color="#E7E1D8" />
+      </group>
+    );
+  }
+  if (zone.id === "studio") {
+    return (
+      <group>
+        <Easel position={at(midX - 10, backY + 16)} />
+        <mesh position={at(midX + 36, deskY, 0.8)} rotation={[-Math.PI / 2, 0, 0.4]}>
+          <cylinderGeometry args={[0.12, 0.12, 0.03, 10]} />
+          <meshLambertMaterial color="#F4F1EC" />
         </mesh>
-        <mesh position={[-0.4, 0.96, 0.08]}>
-          <sphereGeometry args={[0.04, 8, 8]} />
-          <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={1} />
+        {["#F7D3DD", "#CDE8F2", "#F8E3C2"].map((color, index) => (
+          <mesh key={color} position={at(zone.x + 30 + index * 16, backY + 8, 0.1)}>
+            <cylinderGeometry args={[0.05, 0.05, 0.12, 8]} />
+            <meshLambertMaterial color={color} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (zone.id === "review") {
+    return (
+      <group>
+        <Desk position={at(midX, deskY)} size={[1.3, 0.08, 0.7]} />
+        <mesh position={at(midX, deskY, 0.8)}>
+          <boxGeometry args={[0.7, 0.04, 0.4]} />
+          <meshLambertMaterial color="#F4F1EC" emissive="#9FD8FF" emissiveIntensity={0.45} />
+        </mesh>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Block key={index} position={at(zone.x + 24 + index * 22, backY, 0.55)} size={[0.16, 0.12, 0.02]} color={index % 2 ? "#E2D6F2" : "#F7D3DD"} radius={0.01} />
+        ))}
+      </group>
+    );
+  }
+  if (zone.id === "workstation") {
+    return (
+      <group>
+        <Desk position={at(midX, deskY)} size={[1.5, 0.08, 0.62]} />
+        <Monitor position={at(midX - 16, deskY - 4, 0.75)} />
+        <Chair position={at(midX - 36, deskY + 28)} rotation={Math.PI} />
+        <Chair position={at(midX + 36, deskY + 28)} rotation={Math.PI} />
+        <Block position={at(zone.x + zone.width - 30, backY, 0.28)} size={[0.22, 0.5, 0.28]} color="#2E3138" />
+        <mesh position={at(zone.x + zone.width - 30, backY + 2, 0.55)}>
+          <boxGeometry args={[0.04, 0.28, 0.02]} />
+          <meshLambertMaterial color="#9FD8FF" emissive="#9FD8FF" emissiveIntensity={0.6} />
         </mesh>
       </group>
+    );
+  }
+  if (zone.id === "lab") {
+    return (
+      <group>
+        <Desk position={at(midX - 16, deskY)} size={[1.2, 0.08, 0.6]} />
+        <RobotArm position={at(zone.x + zone.width - 52, backY)} />
+        <Block position={at(zone.x + 32, backY, 0.4)} size={[0.4, 0.7, 0.22]} color="#F4F1EC" />
+        <mesh position={at(midX + 10, deskY, 0.86)}>
+          <sphereGeometry args={[0.1, 10, 8]} />
+          <meshLambertMaterial color="#F8FAFC" />
+        </mesh>
+        <mesh position={at(midX, zone.y + zone.height * 0.62, 0.02)} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[worldLen(zone.width * 0.7), 0.08]} />
+          <meshLambertMaterial color="#F5D76E" />
+        </mesh>
+      </group>
+    );
+  }
+  return (
+    <group>
+      <Desk position={at(midX, deskY)} />
+      <Monitor position={at(midX, deskY - 6, 0.75)} />
+    </group>
+  );
+}
+
+function CommandRoom({ zone }: { zone: PlacedZone }) {
+  const spot = standPoint(zone);
+  const hub = at(zone.x + zone.width / 2, zone.y + zone.height * 0.46);
+  return (
+    <group>
+      <mesh position={[hub[0], 0.02, hub[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.55, 0.78, 6]} />
+        <meshLambertMaterial color="#7DD3C7" emissive="#7DD3C7" emissiveIntensity={0.35} />
+      </mesh>
+      <Block position={[hub[0], 0.42, hub[2]]} size={[0.9, 0.7, 0.9]} color="#C89F74" />
+      {[-0.7, 0, 0.7].map((offset) => (
+        <group key={offset} position={[hub[0] + offset, 0, hub[2] - 0.15]} rotation={[0, offset * -0.35, 0]}>
+          <Block position={[0, 0.95, 0]} size={[0.42, 0.28, 0.04]} color="#2E3138" radius={0.02} />
+          <mesh position={[0, 0.95, 0.03]}>
+            <planeGeometry args={[0.34, 0.2]} />
+            <meshLambertMaterial color="#9FD8FF" emissive="#9FD8FF" emissiveIntensity={0.3} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={at(spot.x + 28, spot.y - 10, 0.35)}>
+        <cylinderGeometry args={[0.015, 0.015, 0.4, 6]} />
+        <meshLambertMaterial color="#4A4F57" />
+      </mesh>
+      <mesh position={at(spot.x + 28, spot.y - 10, 0.56)}>
+        <boxGeometry args={[0.16, 0.1, 0.02]} />
+        <meshLambertMaterial color="#CFEFEA" />
+      </mesh>
+    </group>
+  );
+}
+
+function SlidesRoom({ zone }: { zone: PlacedZone }) {
+  const screenX = zone.x + zone.width * 0.38;
+  const screenY = zone.y + 48;
+  return (
+    <group>
+      <Block position={at(screenX, screenY, 0.7)} size={[2.2, 1.15, 0.06]} color="#F4F1EC" />
+      <mesh position={at(screenX, screenY, 0.76)}>
+        <planeGeometry args={[2.0, 0.95]} />
+        <meshLambertMaterial color="#F8FAFC" emissive="#EDE9FE" emissiveIntensity={0.25} />
+      </mesh>
+      {[0.35, 0.62, 0.48].map((height, index) => (
+        <mesh key={index} position={at(screenX - 0.55 + index * 0.5, screenY, 0.8)}>
+          <boxGeometry args={[0.22, height, 0.02]} />
+          <meshLambertMaterial color="#A78BFA" />
+        </mesh>
+      ))}
+      <Block position={at(screenX + 1.3, screenY + 8, 0.4)} size={[0.46, 0.7, 0.4]} color="#C89F74" />
+      <ChairRows zone={zone} />
+      <Desk position={at(zone.x + 90, zone.y + zone.height * 0.55)} size={[1.4, 0.08, 0.6]} />
+    </group>
+  );
+}
+
+function ChairRows({ zone }: { zone: PlacedZone }) {
+  const seats: Array<{ x: number; y: number }> = [];
+  for (const row of [0.48, 0.64]) {
+    for (const col of [0.22, 0.34, 0.62, 0.74]) {
+      seats.push({ x: zone.x + zone.width * col, y: zone.y + zone.height * row });
+    }
+  }
+  return (
+    <group>
+      {seats.map((seat) => (
+        <Chair key={`${seat.x}-${seat.y}`} position={at(seat.x, seat.y)} />
+      ))}
+    </group>
+  );
+}
+
+function Globe({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh>
+        <sphereGeometry args={[0.1, 10, 8]} />
+        <meshLambertMaterial color="#CDE8F2" />
+      </mesh>
+      <mesh position={[0, -0.14, 0]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.12, 6]} />
+        <meshLambertMaterial color="#4A4F57" />
+      </mesh>
+    </group>
+  );
+}
+
+function Lounge() {
+  const amenity = layout.amenity;
+  const sofa = at(amenity.x + 120, amenity.y + amenity.height * 0.62);
+  const bar = at(amenity.x + amenity.width - 180, amenity.y + amenity.height * 0.55);
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[sofa[0], 0.015, sofa[2]]} receiveShadow>
+        <planeGeometry args={[2.4, 1.5]} />
+        <meshLambertMaterial color="#FBE6CF" />
+      </mesh>
+      <Sofa position={[sofa[0] - 0.45, 0, sofa[2]]} />
+      <Sofa position={[sofa[0] + 0.55, 0, sofa[2] + 0.35]} rotation={-Math.PI / 2} />
+      <Block position={[sofa[0], 0.18, sofa[2] + 0.15]} size={[0.55, 0.28, 0.4]} color="#C89F74" />
+      <FloorLamp position={[sofa[0] - 1.05, 0, sofa[2] - 0.2]} />
+      <Block position={bar} size={[1.3, 0.72, 0.4]} color="#C89F74" />
+      <CoffeeMachine position={[bar[0] - 0.3, 0.72, bar[2]]} />
+      <Plant position={[bar[0] + 0.85, 0, bar[2]]} scale={1.4} />
     </group>
   );
 }

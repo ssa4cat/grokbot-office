@@ -2,13 +2,14 @@ import { Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { linkAppearance, staticOffice, svgToWorld, WORLD_WIDTH, type PlacedZone } from "@/data/layout-office";
+import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
+import { handoffPoints } from "./walkways";
 import { useOfficeStore } from "@/store/office-store";
 import { AgentCharacter } from "./AgentCharacter";
 import { GrokRoom3D } from "./GrokRoom3D";
 
-const BG_LIGHT = new THREE.Color("#d7ecfb");
-const BG_DARK = new THREE.Color("#0b1220");
+const BG_LIGHT = new THREE.Color("#EEF0F3");
+const BG_DARK = new THREE.Color("#1c1917");
 
 function BackgroundSync() {
   const theme = useOfficeStore((s) => s.theme);
@@ -28,92 +29,49 @@ function BackgroundSync() {
   return null;
 }
 
-function arcPoints(x1: number, z1: number, x2: number, z2: number, curve: number): Array<[number, number, number]> {
-  const midX = (x1 + x2) / 2;
-  const midZ = (z1 + z2) / 2;
-  const dx = x2 - x1;
-  const dz = z2 - z1;
-  const dist = Math.hypot(dx, dz) || 1;
-  const bend = curve * 0.35 * Math.min(dist, 2.4);
-  const bezier = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(x1, 0.35, z1),
-    new THREE.Vector3(midX - (dz / dist) * bend, 0.9, midZ + (dx / dist) * bend),
-    new THREE.Vector3(x2, 0.35, z2),
-  );
-  return bezier.getPoints(28).map((point) => [point.x, point.y, point.z]);
-}
-
-function corridorPoints(
-  source: { x: number; y: number },
-  target: { x: number; y: number },
-  sourceId: string,
-  targetId: string,
-  lane: number,
-): Array<[number, number, number]> {
-  const layout = staticOffice.layout;
-  const zoneOf = (id: string) => {
-    const seat = layout.seats.find((item) => item.agentId === id);
-    return layout.zones.find((zone) => zone.id === seat?.zoneId);
-  };
-  const sourceZone = zoneOf(sourceId);
-  const targetZone = zoneOf(targetId);
-  const lift = (x: number, y: number, height: number): [number, number, number] => {
-    const [wx, , wz] = svgToWorld({ x, y });
-    return [wx, height, wz];
-  };
-  if (!sourceZone || !targetZone) {
-    return [lift(source.x, source.y, 0.35), lift(target.x, target.y, 0.35)];
-  }
-  const gridRight = layout.amenity.x + layout.amenity.width;
-  const gutter = (zone: PlacedZone) => {
-    if (zone.width > gridRight * 0.7) return zone.x + 28;
-    const right = zone.x + zone.width + 6;
-    return right > gridRight - 2 ? zone.x - 6 : right;
-  };
-  const railY = layout.amenity.y - 42 + lane * 8;
-  const railHeight = 0.08 + lane * 0.05;
-  const exit = (zone: PlacedZone) => zone.y + zone.height - 12;
-  return [
-    lift(source.x, source.y, 0.35),
-    lift(source.x, exit(sourceZone), 0.2),
-    lift(gutter(sourceZone), exit(sourceZone), 0.2),
-    lift(gutter(sourceZone), railY, railHeight),
-    lift(gutter(targetZone), railY, railHeight),
-    lift(gutter(targetZone), exit(targetZone), 0.2),
-    lift(target.x, exit(targetZone), 0.2),
-    lift(target.x, target.y, 0.35),
-  ];
+function flowPoints(sourceId: string, targetId: string): Array<[number, number, number]> {
+  return handoffPoints(sourceId, targetId).map((point) => {
+    const [x, , z] = svgToWorld(point);
+    return [x, 0.08, z];
+  });
 }
 
 function CollabLines() {
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
+  const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
+  const activeHandoff = useOfficeStore((s) => s.activeHandoff);
 
   const curves = useMemo(() => {
     return links.flatMap((link) => {
       const source = agents.get(link.sourceId);
       const target = agents.get(link.targetId);
       if (!source || !target) return [];
-      const [x1, , z1] = svgToWorld(source.position);
-      const [x2, , z2] = svgToWorld(target.position);
-      const look = linkAppearance(link);
-      const lane = staticOffice.links
-        .filter((item) => linkAppearance(item).corridor)
-        .findIndex((item) => item.sourceId === link.sourceId && item.targetId === link.targetId && item.kind === link.kind);
-      const points = look.corridor
-        ? corridorPoints(source.position, target.position, link.sourceId, link.targetId, Math.max(0, lane))
-        : arcPoints(x1, z1, x2, z2, look.curve);
-      const tip = points[Math.min(points.length - 1, Math.floor(points.length * 0.9))] ?? points[points.length - 1];
-      return [{ key: `${look.pipeline}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`, points, color: look.color, dashed: look.dashed, tip: { x: tip[0], y: tip[1], z: tip[2] } }];
+      const points = flowPoints(link.sourceId, link.targetId);
+      if (points.length < 2) return [];
+      const hot =
+        (activeHandoff?.sourceId === link.sourceId && activeHandoff.targetId === link.targetId) ||
+        selectedAgentId === link.sourceId ||
+        selectedAgentId === link.targetId;
+      const tip = points[Math.max(0, points.length - 2)];
+      return [{
+        key: `${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`,
+        points,
+        color: hot ? "#C4B5FD" : "#A78BFA",
+        opacity: hot ? 1 : 0.6,
+        width: hot ? 2.4 : 1,
+        dashed: link.kind === "return",
+        tip,
+      }];
     });
-  }, [agents, links]);
+  }, [agents, links, selectedAgentId, activeHandoff]);
 
   return (
     <group>
       {curves.map((curve) => (
         <group key={curve.key}>
-          <Line points={curve.points} color={curve.color} lineWidth={curve.dashed ? 2 : 3} dashed={curve.dashed} dashSize={0.12} gapSize={0.08} />
-          <mesh position={[curve.tip.x, curve.tip.y, curve.tip.z]}>
+          <Line points={curve.points} color={curve.color} lineWidth={curve.width} transparent opacity={curve.opacity} dashed={curve.dashed} dashSize={0.08} gapSize={0.06} />
+          <mesh position={curve.tip}>
             <sphereGeometry args={[0.05, 10, 10]} />
             <meshStandardMaterial color={curve.color} emissive={curve.color} emissiveIntensity={0.8} />
           </mesh>
@@ -137,10 +95,10 @@ function SceneContent() {
         enableRotate
         enablePan
         enableZoom
-        minPolarAngle={Math.PI / 8}
-        maxPolarAngle={Math.PI / 2.15}
-        minDistance={6}
-        maxDistance={28}
+        minPolarAngle={0.72}
+        maxPolarAngle={1.2}
+        minDistance={8}
+        maxDistance={36}
         target={target}
         enableDamping
         dampingFactor={0.08}
@@ -160,12 +118,12 @@ export default function Scene3D() {
     <div className="h-full w-full">
       <Canvas
         gl={{ antialias: true, alpha: false }}
-        shadows
+        shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{
-          fov: 38,
-          position: [WORLD_WIDTH * 0.95, depth * 1.55, depth * 1.55],
+          fov: 32,
+          position: [WORLD_WIDTH * 0.15, depth * 0.72, depth * 1.22],
           near: 0.1,
-          far: 100,
+          far: 120,
         }}
       >
         <SceneContent />
