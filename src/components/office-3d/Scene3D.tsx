@@ -1,14 +1,15 @@
-import { Line, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { linkAppearance, staticOffice, svgToWorld, WORLD_WIDTH, type PlacedZone } from "@/data/layout-office";
+import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
+import { handoffPoints, occupiedFloor } from "./walkways";
 import { useOfficeStore } from "@/store/office-store";
 import { AgentCharacter } from "./AgentCharacter";
 import { GrokRoom3D } from "./GrokRoom3D";
 
-const BG_LIGHT = new THREE.Color("#d7ecfb");
-const BG_DARK = new THREE.Color("#0b1220");
+const BG_LIGHT = new THREE.Color("#EEF0F3");
+const BG_DARK = new THREE.Color("#1c1917");
 
 function BackgroundSync() {
   const theme = useOfficeStore((s) => s.theme);
@@ -28,123 +29,180 @@ function BackgroundSync() {
   return null;
 }
 
-function arcPoints(x1: number, z1: number, x2: number, z2: number, curve: number): Array<[number, number, number]> {
-  const midX = (x1 + x2) / 2;
-  const midZ = (z1 + z2) / 2;
-  const dx = x2 - x1;
-  const dz = z2 - z1;
-  const dist = Math.hypot(dx, dz) || 1;
-  const bend = curve * 0.35 * Math.min(dist, 2.4);
-  const bezier = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(x1, 0.35, z1),
-    new THREE.Vector3(midX - (dz / dist) * bend, 0.9, midZ + (dx / dist) * bend),
-    new THREE.Vector3(x2, 0.35, z2),
-  );
-  return bezier.getPoints(28).map((point) => [point.x, point.y, point.z]);
+function flowPoints(sourceId: string, targetId: string): Array<[number, number, number]> {
+  return handoffPoints(sourceId, targetId).map((point) => {
+    const [x, , z] = svgToWorld(point);
+    return [x, 0.05, z];
+  });
 }
 
-function corridorPoints(
-  source: { x: number; y: number },
-  target: { x: number; y: number },
-  sourceId: string,
-  targetId: string,
-  lane: number,
-): Array<[number, number, number]> {
-  const layout = staticOffice.layout;
-  const zoneOf = (id: string) => {
-    const seat = layout.seats.find((item) => item.agentId === id);
-    return layout.zones.find((zone) => zone.id === seat?.zoneId);
-  };
-  const sourceZone = zoneOf(sourceId);
-  const targetZone = zoneOf(targetId);
-  const lift = (x: number, y: number, height: number): [number, number, number] => {
-    const [wx, , wz] = svgToWorld({ x, y });
-    return [wx, height, wz];
-  };
-  if (!sourceZone || !targetZone) {
-    return [lift(source.x, source.y, 0.35), lift(target.x, target.y, 0.35)];
-  }
-  const gridRight = layout.amenity.x + layout.amenity.width;
-  const gutter = (zone: PlacedZone) => {
-    if (zone.width > gridRight * 0.7) return zone.x + 28;
-    const right = zone.x + zone.width + 6;
-    return right > gridRight - 2 ? zone.x - 6 : right;
-  };
-  const railY = layout.amenity.y - 42 + lane * 8;
-  const railHeight = 0.08 + lane * 0.05;
-  const exit = (zone: PlacedZone) => zone.y + zone.height - 12;
-  return [
-    lift(source.x, source.y, 0.35),
-    lift(source.x, exit(sourceZone), 0.2),
-    lift(gutter(sourceZone), exit(sourceZone), 0.2),
-    lift(gutter(sourceZone), railY, railHeight),
-    lift(gutter(targetZone), railY, railHeight),
-    lift(gutter(targetZone), exit(targetZone), 0.2),
-    lift(target.x, exit(targetZone), 0.2),
-    lift(target.x, target.y, 0.35),
-  ];
+function FlowRibbon({
+  points,
+  color,
+  opacity,
+  width,
+}: {
+  points: Array<[number, number, number]>;
+  color: string;
+  opacity: number;
+  width: number;
+}) {
+  return (
+    <group>
+      {points.slice(0, -1).map((start, index) => {
+        const end = points[index + 1];
+        const dx = end[0] - start[0];
+        const dz = end[2] - start[2];
+        const len = Math.hypot(dx, dz);
+        if (len < 0.04) return null;
+        return (
+          <mesh
+            key={index}
+            position={[(start[0] + end[0]) / 2, 0.05, (start[2] + end[2]) / 2]}
+            rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]}
+          >
+            <planeGeometry args={[len, width]} />
+            <meshLambertMaterial color={color} transparent opacity={opacity} depthWrite={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
 }
 
 function CollabLines() {
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
+  const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
+  const activeHandoff = useOfficeStore((s) => s.activeHandoff);
 
   const curves = useMemo(() => {
     return links.flatMap((link) => {
       const source = agents.get(link.sourceId);
       const target = agents.get(link.targetId);
       if (!source || !target) return [];
-      const [x1, , z1] = svgToWorld(source.position);
-      const [x2, , z2] = svgToWorld(target.position);
-      const look = linkAppearance(link);
-      const lane = staticOffice.links
-        .filter((item) => linkAppearance(item).corridor)
-        .findIndex((item) => item.sourceId === link.sourceId && item.targetId === link.targetId && item.kind === link.kind);
-      const points = look.corridor
-        ? corridorPoints(source.position, target.position, link.sourceId, link.targetId, Math.max(0, lane))
-        : arcPoints(x1, z1, x2, z2, look.curve);
-      const tip = points[Math.min(points.length - 1, Math.floor(points.length * 0.9))] ?? points[points.length - 1];
-      return [{ key: `${look.pipeline}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`, points, color: look.color, dashed: look.dashed, tip: { x: tip[0], y: tip[1], z: tip[2] } }];
+      const points = flowPoints(link.sourceId, link.targetId);
+      if (points.length < 2) return [];
+      const hot =
+        (activeHandoff?.sourceId === link.sourceId && activeHandoff.targetId === link.targetId) ||
+        selectedAgentId === link.sourceId ||
+        selectedAgentId === link.targetId;
+      const tip = points[Math.max(0, points.length - 2)];
+      return [{
+        key: `${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`,
+        points,
+        color: hot ? "#7C3AED" : "#A78BFA",
+        opacity: hot ? 1 : 0.6,
+        width: hot ? 0.16 : 0.07,
+        dashed: link.kind === "return",
+        tip,
+      }];
     });
-  }, [agents, links]);
+  }, [agents, links, selectedAgentId, activeHandoff]);
 
   return (
     <group>
       {curves.map((curve) => (
         <group key={curve.key}>
-          <Line points={curve.points} color={curve.color} lineWidth={curve.dashed ? 2 : 3} dashed={curve.dashed} dashSize={0.12} gapSize={0.08} />
-          <mesh position={[curve.tip.x, curve.tip.y, curve.tip.z]}>
-            <sphereGeometry args={[0.05, 10, 10]} />
-            <meshStandardMaterial color={curve.color} emissive={curve.color} emissiveIntensity={0.8} />
-          </mesh>
+          <FlowRibbon points={curve.points} color={curve.color} opacity={curve.opacity} width={curve.width} />
         </group>
       ))}
     </group>
   );
 }
 
+function floorFrame() {
+  const floor = occupiedFloor();
+  return { floorX: floor.centerX, floorZ: floor.centerZ, floorW: floor.floorW, floorD: floor.floorD };
+}
+
+function FitCamera() {
+  const { camera, size } = useThree();
+  const controls = useThree((state) => state.controls) as { target: THREE.Vector3; update: () => void } | null;
+  const { floorX, floorZ, floorW, floorD } = floorFrame();
+
+  useLayoutEffect(() => {
+    const persp = camera as THREE.PerspectiveCamera;
+    if (!persp.isPerspectiveCamera) return;
+    const center = new THREE.Vector3(floorX, 0.55, floorZ);
+    const corners: THREE.Vector3[] = [];
+    for (const y of [0, 1.35]) {
+      for (const x of [floorX - floorW / 2, floorX + floorW / 2]) {
+        for (const z of [floorZ - floorD / 2, floorZ + floorD / 2]) {
+          corners.push(new THREE.Vector3(x, y, z));
+        }
+      }
+    }
+    const elev = (38 * Math.PI) / 180;
+    const azimuth = 0.62;
+    const margin = 24;
+    let lo = 8;
+    let hi = 110;
+    const place = (dist: number) => {
+      persp.position.set(
+        center.x + Math.cos(elev) * dist * Math.sin(azimuth),
+        center.y + Math.sin(elev) * dist,
+        center.z + Math.cos(elev) * dist * Math.cos(azimuth),
+      );
+      persp.lookAt(center);
+      persp.updateProjectionMatrix();
+      persp.updateMatrixWorld();
+    };
+    for (let i = 0; i < 24; i++) {
+      const dist = (lo + hi) / 2;
+      place(dist);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const corner of corners) {
+        const projected = corner.clone().project(persp);
+        const sx = (projected.x * 0.5 + 0.5) * size.width;
+        const sy = (-projected.y * 0.5 + 0.5) * size.height;
+        minX = Math.min(minX, sx);
+        maxX = Math.max(maxX, sx);
+        minY = Math.min(minY, sy);
+        maxY = Math.max(maxY, sy);
+      }
+      const scale = Math.max((maxX - minX) / (size.width - margin * 2), (maxY - minY) / (size.height - margin * 2));
+      const outside = minX < margin || minY < margin || maxX > size.width - margin || maxY > size.height - margin;
+      if (outside || scale > 0.85) lo = dist;
+      else hi = dist;
+    }
+    place(hi);
+    if (controls) {
+      controls.target.copy(center);
+      controls.update();
+    }
+  }, [camera, controls, floorD, floorW, floorX, floorZ, size.height, size.width]);
+
+  return null;
+}
+
 function SceneContent() {
   const agents = useOfficeStore((s) => s.agents);
   const theme = useOfficeStore((s) => s.theme);
   const agentList = Array.from(agents.values()).filter((agent) => !agent.isPlaceholder);
-  const depth = staticOffice.layout.worldDepth;
-  const target: [number, number, number] = [WORLD_WIDTH / 2, 0.3, depth * 0.58];
+  const { floorX, floorZ } = floorFrame();
+  const target: [number, number, number] = [floorX, 0.55, floorZ];
 
   return (
     <>
       <BackgroundSync />
       <OrbitControls
+        makeDefault
         enableRotate
         enablePan
         enableZoom
-        minPolarAngle={Math.PI / 8}
-        maxPolarAngle={Math.PI / 2.15}
-        minDistance={6}
-        maxDistance={28}
+        minPolarAngle={0.7}
+        maxPolarAngle={1.15}
+        minDistance={10}
+        maxDistance={120}
         target={target}
         enableDamping
         dampingFactor={0.08}
       />
+      <FitCamera />
       <GrokRoom3D theme={theme} />
       <CollabLines />
       {agentList.map((agent) => (
@@ -160,12 +218,12 @@ export default function Scene3D() {
     <div className="h-full w-full">
       <Canvas
         gl={{ antialias: true, alpha: false }}
-        shadows
+        shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{
-          fov: 38,
-          position: [WORLD_WIDTH * 0.95, depth * 1.55, depth * 1.55],
+          fov: 32,
+          position: [WORLD_WIDTH * 0.15, depth * 0.72, depth * 1.22],
           near: 0.1,
-          far: 100,
+          far: 120,
         }}
       >
         <SceneContent />

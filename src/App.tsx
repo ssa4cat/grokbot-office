@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { FloorPlan } from "@/components/office-2d/FloorPlan";
 import { staticOffice } from "@/data/layout-office";
+import { useDynamicShow } from "@/hooks/useDynamicShow";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useOfficeStore } from "@/store/office-store";
 
@@ -76,6 +77,7 @@ function ConfigError({ message }: { message: string }) {
 export function App() {
   const { isMobile } = useResponsive();
   const setViewMode = useOfficeStore((s) => s.setViewMode);
+  useDynamicShow();
 
   useEffect(() => {
     if (isMobile) setViewMode("2d");

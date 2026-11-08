@@ -64,6 +64,25 @@ export function FloorPlan() {
 
         <OfficeHeader layout={layout} muted={muted} isDark={isDark} />
 
+        {layout.reserved.map((slot) => (
+          <g key={`reserved-${slot.col}-${slot.row}`}>
+            <rect
+              x={slot.x + 8}
+              y={slot.y + 8}
+              width={slot.width - 16}
+              height={slot.height - 16}
+              rx={16}
+              fill={isDark ? "#1e1b2e" : "#f5f3ff"}
+              stroke="#a78bfa"
+              strokeWidth={2}
+              strokeDasharray="10 8"
+            />
+            <text x={slot.x + 20} y={slot.y + 32} fill={muted} fontSize={13} fontWeight={700}>
+              預留
+            </text>
+          </g>
+        ))}
+
         {layout.zones.map((zone) => {
           const zoneAgents = staticOffice.profiles.filter((profile) => profile.zoneId === zone.id);
           const selected = zoneAgents.some((profile) => profile.id === selectedAgentId);

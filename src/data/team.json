@@ -2,7 +2,8 @@
   "office": {
     "title": "GROK BOT",
     "subtitle": "Grok Bot 工作室",
-    "columns": 4
+    "columns": 4,
+    "reserveSlots": 2
   },
   "zones": [
     {

@@ -15,6 +15,8 @@ export function TopBar({ isMobile = false }: TopBarProps) {
   const setViewMode = useOfficeStore((s) => s.setViewMode);
   const theme = useOfficeStore((s) => s.theme);
   const setTheme = useOfficeStore((s) => s.setTheme);
+  const dynamicDisplay = useOfficeStore((s) => s.dynamicDisplay);
+  const setDynamicDisplay = useOfficeStore((s) => s.setDynamicDisplay);
   const webglAvailable = useMemo(() => isWebGLAvailable(), []);
 
   return (
@@ -36,10 +38,15 @@ export function TopBar({ isMobile = false }: TopBarProps) {
         >
           {theme === "light" ? "🌙" : "☀️"}
         </button>
-        <span className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          {t("common:status.static")}
-        </span>
+        <button
+          type="button"
+          onClick={() => setDynamicDisplay(!dynamicDisplay)}
+          className="inline-flex items-center gap-2 rounded-full px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-pressed={dynamicDisplay}
+        >
+          <span className={`h-2.5 w-2.5 rounded-full ${dynamicDisplay ? "bg-emerald-500" : "bg-slate-400"}`} />
+          {dynamicDisplay ? t("common:status.dynamic") : t("common:status.static")}
+        </button>
       </div>
     </header>
   );

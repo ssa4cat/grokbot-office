@@ -1,8 +1,7 @@
 import { Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import type { Group } from "three";
+import { Vector3, type Group } from "three";
 import { getProfile, svgToWorld, type Accessory } from "@/data/layout-office";
 import type { VisualAgent } from "@/gateway/types";
 import { useOfficeStore } from "@/store/office-store";
@@ -14,43 +13,91 @@ interface AgentCharacterProps {
   agent: VisualAgent;
 }
 
-const MODEL_SCALE = 1.65;
+function SpeechBubble({ text }: { text: string }) {
+  const anchor = useRef<Group>(null);
+  const { camera, size } = useThree();
+  const [below, setBelow] = useState(false);
+  const [shift, setShift] = useState(0);
+  const scratch = useRef(new Vector3());
+
+  useFrame(() => {
+    const node = anchor.current;
+    if (!node) return;
+    const world = node.getWorldPosition(scratch.current);
+    world.y += 1.55;
+    const projected = world.clone().project(camera);
+    const sx = (projected.x * 0.5 + 0.5) * size.width;
+    const sy = (-projected.y * 0.5 + 0.5) * size.height;
+    const nextBelow = sy < 88;
+    let nextShift = 0;
+    if (sx < 118) nextShift = 118 - sx;
+    if (sx > size.width - 118) nextShift = size.width - 118 - sx;
+    setBelow((prev) => (prev === nextBelow ? prev : nextBelow));
+    setShift((prev) => (Math.abs(prev - nextShift) < 4 ? prev : nextShift));
+  });
+
+  return (
+    <group ref={anchor}>
+      <Html position={[0, below ? 0.05 : 1.85, 0]} center zIndexRange={[200, 0]} style={{ pointerEvents: "none", zIndex: 30 }}>
+        <div
+          className="pointer-events-none rounded-2xl border border-slate-200 px-2.5 py-1.5 text-left text-[12px] leading-snug text-slate-800 shadow-md"
+          style={{
+            width: 168,
+            minWidth: 120,
+            maxWidth: 200,
+            background: "#ffffff",
+            whiteSpace: "normal",
+            writingMode: "horizontal-tb",
+            wordBreak: "break-word",
+            transform: `translateX(${shift}px)`,
+          }}
+        >
+          {text}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+const MODEL_SCALE = 1.15;
 
 export function AgentCharacter({ agent }: AgentCharacterProps) {
-  const { t } = useTranslation("common");
   const groupRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
-  const tickMovement = useOfficeStore((s) => s.tickMovement);
   const [hovered, setHovered] = useState(false);
   const profile = getProfile(agent.id);
   const accent = profile?.accent ?? "#7dd3fc";
   const accessory = profile?.accessory ?? null;
   const isSelected = selectedAgentId === agent.id;
   const [targetX, , targetZ] = svgToWorld(agent.position);
+  const fadeLabel = useOfficeStore((state) => Array.from(state.agents.values()).some((other) => other.speechBubble));
+  const yaw = useRef(Math.PI);
 
   useFrame((state, delta) => {
     if (!groupRef.current || !bodyRef.current) return;
     const time = state.clock.elapsedTime;
-    if (agent.movement) {
-      tickMovement(agent.id, delta);
-      const current = useOfficeStore.getState().agents.get(agent.id);
-      if (current) {
-        const [wx, , wz] = svgToWorld(current.position);
-        const pos = groupRef.current.position;
-        const lerp = Math.min(2.5 * delta, 0.1);
-        pos.x += (wx - pos.x) * lerp;
-        pos.z += (wz - pos.z) * lerp;
-      }
-      bodyRef.current.position.y = Math.abs(Math.sin(time * 8)) * 0.04;
-      return;
-    }
     const pos = groupRef.current.position;
     const lerp = 1 - Math.pow(0.05, delta);
     pos.x += (targetX - pos.x) * lerp;
     pos.z += (targetZ - pos.z) * lerp;
-    bodyRef.current.position.y = Math.sin(time * 2) * 0.015;
+    bodyRef.current.position.y = agent.movement ? Math.abs(Math.sin(time * 8)) * 0.04 : Math.sin(time * 2) * 0.015;
+    let targetYaw = Math.PI;
+    const move = agent.movement;
+    if (move && move.path.length > 1) {
+      const index = Math.min(move.path.length - 1, Math.max(1, Math.ceil(move.progress * (move.path.length - 1))));
+      const next = move.path[index];
+      const prev = move.path[index - 1];
+      const [ax, , az] = svgToWorld(prev);
+      const [bx, , bz] = svgToWorld(next);
+      if (Math.hypot(bx - ax, bz - az) > 0.02) targetYaw = Math.atan2(bx - ax, bz - az);
+    }
+    let turn = targetYaw - yaw.current;
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    yaw.current += turn * Math.min(1, delta * 6);
+    groupRef.current.rotation.y = yaw.current;
   });
 
   const eye = agent.status === "idle" ? "#67e8f9" : accent;
@@ -78,45 +125,45 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
         {accessory === "cape" && (
           <mesh position={[0, 0.38, 0.06]} castShadow>
             <boxGeometry args={[0.36, 0.42, 0.02]} />
-            <meshStandardMaterial color={accent} />
+            <meshLambertMaterial color={accent} />
           </mesh>
         )}
         <mesh position={[0, 0.32, 0]} castShadow>
           <capsuleGeometry args={[0.13, 0.2, 6, 12]} />
-          <meshStandardMaterial color="#f8fafc" roughness={0.32} metalness={0.08} />
+          <meshLambertMaterial color="#f8fafc" />
         </mesh>
         <AccessoryMark accessory={accessory} accent={accent} />
         <mesh position={[0, 0.62, 0]} castShadow>
           <sphereGeometry args={[0.16, 24, 24]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.25} metalness={0.12} />
+          <meshLambertMaterial color="#ffffff" />
         </mesh>
         <mesh position={[-0.155, 0.62, 0]}>
           <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.35} />
+          <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.35} />
         </mesh>
         <mesh position={[0.155, 0.62, 0]}>
           <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.35} />
+          <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.35} />
         </mesh>
         <mesh position={[0, 0.63, 0.12]}>
           <boxGeometry args={[0.18, 0.07, 0.03]} />
-          <meshStandardMaterial color="#0f172a" metalness={0.45} roughness={0.25} />
+          <meshLambertMaterial color="#0f172a" />
         </mesh>
         <mesh position={[-0.045, 0.635, 0.14]}>
           <sphereGeometry args={[0.02, 10, 10]} />
-          <meshStandardMaterial color={eye} emissive={eye} emissiveIntensity={1.4} />
+          <meshLambertMaterial color={eye} emissive={eye} emissiveIntensity={1.4} />
         </mesh>
         <mesh position={[0.045, 0.635, 0.14]}>
           <sphereGeometry args={[0.02, 10, 10]} />
-          <meshStandardMaterial color={eye} emissive={eye} emissiveIntensity={1.4} />
+          <meshLambertMaterial color={eye} emissive={eye} emissiveIntensity={1.4} />
         </mesh>
         <mesh position={[0, 0.84, 0]}>
           <cylinderGeometry args={[0.008, 0.008, 0.12, 8]} />
-          <meshStandardMaterial color="#94a3b8" metalness={0.6} />
+          <meshLambertMaterial color="#94a3b8" />
         </mesh>
         <mesh position={[0, 0.92, 0]}>
           <sphereGeometry args={[0.032, 12, 12]} />
-          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.7} />
+          <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.7} />
         </mesh>
       </group>
 
@@ -129,14 +176,17 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       {(isSelected || hovered) && (
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.22, 0.28, 32]} />
-          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.6} />
+          <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.6} />
         </mesh>
       )}
 
-      <Html position={[0, 1.15, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-        <div className="pointer-events-none whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-center text-[11px] font-semibold text-slate-700 shadow">
+      {agent.speechBubble && <SpeechBubble text={agent.speechBubble.text} />}
+      <Html position={[0.5, 0.4, 0]} center zIndexRange={[8, 0]} style={{ pointerEvents: "none" }}>
+        <div
+          className="pointer-events-none whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-center text-[11px] font-semibold text-slate-700 shadow transition-opacity"
+          style={{ opacity: fadeLabel ? 0 : 1 }}
+        >
           {agent.name}
-          <span className="ml-1 font-normal text-slate-400">{t(`agent.statusLabels.${agent.status}`)}</span>
         </div>
       </Html>
     </group>
@@ -148,7 +198,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0.04, 0.76, 0.04]} rotation={[0.2, 0, 0.1]}>
         <boxGeometry args={[0.2, 0.05, 0.16]} />
-        <meshStandardMaterial color="#1e293b" />
+        <meshLambertMaterial color="#1e293b" />
       </mesh>
     );
   }
@@ -156,7 +206,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0.03, 0.76, 0]} rotation={[0, 0, 0.2]}>
         <sphereGeometry args={[0.09, 12, 8]} />
-        <meshStandardMaterial color={accent} />
+        <meshLambertMaterial color={accent} />
       </mesh>
     );
   }
@@ -164,7 +214,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0, 0.63, 0.15]}>
         <boxGeometry args={[0.2, 0.05, 0.02]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.3} />
+        <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.3} />
       </mesh>
     );
   }
@@ -172,7 +222,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0, 0.34, 0.12]}>
         <boxGeometry args={[0.06, 0.05, 0.01]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.3} />
+        <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.3} />
       </mesh>
     );
   }
@@ -180,7 +230,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0.16, 0.36, 0.08]} rotation={[0.4, 0, 0.6]}>
         <boxGeometry args={[0.02, 0.16, 0.02]} />
-        <meshStandardMaterial color="#facc15" />
+        <meshLambertMaterial color="#facc15" />
       </mesh>
     );
   }
@@ -188,7 +238,7 @@ function AccessoryMark({ accessory, accent }: { accessory: Accessory | null; acc
     return (
       <mesh position={[0.18, 0.4, 0.08]} rotation={[0.5, 0, 0.4]}>
         <boxGeometry args={[0.02, 0.14, 0.02]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
+        <meshLambertMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
       </mesh>
     );
   }

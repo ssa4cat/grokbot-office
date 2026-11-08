@@ -86,6 +86,15 @@ function getInitialTheme(): ThemeMode {
   return "light";
 }
 
+function getInitialDynamic(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+const homePositions = new Map(
+  Array.from(seededAgents.entries()).map(([id, agent]) => [id, { ...agent.position }]),
+);
+
 function getInitialBloom(): boolean {
   if (typeof window === "undefined") {
     return true;
@@ -232,6 +241,8 @@ export const useOfficeStore = create<OfficeStore>()(
     sidebarCollapsed: false,
     lastSessionsSnapshot: null,
     theme: getInitialTheme(),
+    dynamicDisplay: getInitialDynamic(),
+    activeHandoff: null,
     bloomEnabled: getInitialBloom(),
     operatorScopes: [] as string[],
     tokenHistory: [] as TokenSnapshot[],
@@ -458,6 +469,43 @@ export const useOfficeStore = create<OfficeStore>()(
         }
       });
       useOfficeStore.getState().startMovement(agentId, returnZone, returnPos);
+    },
+
+    setDynamicDisplay: (on: boolean) => {
+      set((state) => {
+        state.dynamicDisplay = on;
+        state.activeHandoff = null;
+        if (on) return;
+        for (const agent of state.agents.values()) {
+          const home = homePositions.get(agent.id);
+          if (home) agent.position = { ...home };
+          agent.movement = null;
+          agent.speechBubble = null;
+          agent.currentTool = null;
+          if (!agent.isPlaceholder) agent.status = "idle";
+        }
+      });
+    },
+
+    setActiveHandoff: (link) => {
+      set((state) => {
+        state.activeHandoff = link;
+      });
+    },
+
+    followPath: (agentId, path, duration) => {
+      set((state) => {
+        const agent = state.agents.get(agentId);
+        if (!agent || path.length < 2 || agent.movement) return;
+        agent.movement = {
+          path: path.map((point) => ({ ...point })),
+          progress: 0,
+          duration: duration ?? Math.max(1.4, path.length * 0.55),
+          startTime: Date.now(),
+          fromZone: agent.zone,
+          toZone: agent.zone,
+        };
+      });
     },
 
     startMovement: (agentId: string, toZone: AgentZone, targetPos?: { x: number; y: number }) => {
