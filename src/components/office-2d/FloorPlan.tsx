@@ -154,7 +154,7 @@ export function FloorPlan() {
             width={layout.amenity.width - 16}
             height={layout.amenity.height - 16}
             rx={6}
-            fill={isDark ? "#6A4E32" : "#FBE6CF"}
+            fill={isDark ? "#5C4332" : "#F3D3AE"}
           />
 
           {layout.zones.map((zone) => (
@@ -535,25 +535,48 @@ function Lounge({
   px: (cssPx: number) => number;
 }) {
   const { x, y, width, height } = amenity;
-  const wood = isDark ? "#8A6A45" : "#C89F74";
-  const sofa = isDark ? "#8A6244" : "#F4D2B0";
-  const mid = x + width * 0.46;
+  const piece = (size: number) => px(size * 1.3);
+  const sofa = isDark ? "#C4A27C" : "#B98A5E";
+  const sofaEdge = isDark ? "#E8D2B8" : "#8F6A48";
+  const table = isDark ? "#B89070" : "#8F6A48";
+  const shelf = isDark ? "#CDB08A" : "#9C7B5A";
+  const shelfLine = isDark ? "#6E5034" : "#7A5C40";
+  const top = y + 8;
+  const mid = x + width * 0.42;
   return (
     <g>
-      <rect x={x + px(18)} y={y + px(16)} width={px(108)} height={px(58)} rx={px(8)} fill={isDark ? "#8C6848" : "#F3D3AE"} />
-      <rect x={x + px(28)} y={y + px(40)} width={px(64)} height={px(22)} rx={px(6)} fill={sofa} />
-      <rect x={x + px(40)} y={y + px(22)} width={px(40)} height={px(24)} rx={px(6)} fill={sofa} />
-      <rect x={x + px(96)} y={y + px(46)} width={px(28)} height={px(16)} rx={2} fill={wood} />
-      <circle cx={x + px(136)} cy={y + px(28)} r={px(5)} fill="#FFE2B8" stroke={wood} />
-      <rect x={x + px(148)} y={y + px(36)} width={px(40)} height={px(12)} rx={2} fill={wood} />
-      <rect x={mid} y={y + height * 0.38} width={px(36)} height={px(16)} rx={2} fill={wood} />
-      <rect x={mid + px(2)} y={y + height * 0.62} width={px(12)} height={px(10)} rx={2} fill={sofa} />
-      <rect x={mid + px(22)} y={y + height * 0.62} width={px(12)} height={px(10)} rx={2} fill={sofa} />
-      <rect x={x + width - px(230)} y={y + height * 0.32} width={px(120)} height={px(26)} rx={4} fill={wood} />
-      <rect x={x + width - px(214)} y={y + height * 0.16} width={px(22)} height={px(16)} rx={2} fill={isDark ? "#44403c" : "#F4F1EC"} />
-      <CoffeeCup x={x + width - px(160)} y={y + height * 0.48} />
-      <rect x={x + width - px(78)} y={y + px(14)} width={px(36)} height={height - px(28)} rx={3} fill={isDark ? "#44403c" : "#E7E5E4"} stroke="#CDBBA2" />
-      <Plant x={x + px(210)} y={y + height - px(18)} />
+      <rect x={x + piece(16)} y={top + piece(10)} width={piece(64)} height={piece(18)} rx={piece(4)} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + piece(28)} y={top + piece(4)} width={piece(36)} height={piece(20)} rx={piece(4)} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + piece(86)} y={top + piece(22)} width={piece(28)} height={piece(16)} rx={2} fill={table} />
+      <circle cx={x + piece(128)} cy={top + piece(12)} r={px(5)} fill="#F2C14E" stroke="#C99A2E" strokeWidth={px(1)} />
+      <rect x={x + piece(140)} y={top + piece(18)} width={piece(40)} height={piece(12)} rx={2} fill={shelf} />
+      {[0, 1, 2].map((index) => (
+        <line
+          key={index}
+          x1={x + piece(142)}
+          y1={top + piece(21) + index * piece(3.2)}
+          x2={x + piece(178)}
+          y2={top + piece(21) + index * piece(3.2)}
+          stroke={shelfLine}
+          strokeWidth={px(1)}
+        />
+      ))}
+      <rect x={mid} y={top + height * 0.28} width={piece(34)} height={piece(14)} rx={2} fill={table} />
+      <rect x={mid + piece(3)} y={top + height * 0.52} width={piece(10)} height={piece(12)} rx={2} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={mid + piece(20)} y={top + height * 0.52} width={piece(10)} height={piece(12)} rx={2} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + width - piece(210)} y={top + height * 0.3} width={piece(96)} height={piece(18)} rx={4} fill={table} />
+      <rect x={x + width - piece(196)} y={top + height * 0.12} width={piece(18)} height={piece(14)} rx={2} fill={isDark ? "#6B5438" : "#F4F1EC"} stroke={sofaEdge} strokeWidth={px(1)} />
+      <CoffeeCup x={x + width - piece(150)} y={top + height * 0.42} />
+      <rect
+        x={x + width - piece(72)}
+        y={top + piece(8)}
+        width={piece(28)}
+        height={height - piece(20)}
+        rx={3}
+        fill={isDark ? "#6B5438" : "#E7E5E4"}
+        stroke={isDark ? "#CDBBA2" : "#CDBBA2"}
+      />
+      <Plant x={x + piece(196)} y={top + height - piece(16)} />
     </g>
   );
 }

@@ -350,7 +350,7 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   const colGap = 8;
   const spine = 24;
   const amenityGap = 16;
-  const amenityH = 100;
+  const amenityH = 124;
   const centerSplit = Math.floor(columns / 2);
   const gapAfterCol = (col: number) => (col + 1 === centerSplit ? spine : colGap);
   const originX = (col: number) => {
