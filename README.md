@@ -45,20 +45,14 @@ npm run preview
 
 公開網址：<https://ssa4cat.github.io/grokbot-office/>
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) 會在兩種情況部署：
+網站內容在 `gh-pages` 分支的根目錄，不是用 GitHub Actions 的 `deploy-pages`。[`.github/workflows/build.yml`](.github/workflows/build.yml) 會在兩種情況更新這個分支：
 
 - push 到 `main`（合併進主分支之後）
 - 在 GitHub Actions 頁面手動 Run workflow
 
-它使用官方的 `actions/configure-pages`、`actions/upload-pages-artifact`、`actions/deploy-pages`，建置時設定 `VITE_BASE=/grokbot-office/`。權限是 `contents: read`、`pages: write`、`id-token: write`。
+流程是：`npm ci`，再用 `VITE_BASE=/grokbot-office/` 建置，在 `dist/` 放一個 `.nojekyll`（避免 GitHub Pages 忽略底線開頭的檔案），然後用 `peaceiris/actions-gh-pages@v4` 和 `GITHUB_TOKEN` 把 `dist/` 的內容推到 `gh-pages`。workflow 的權限是 `contents: write`。
 
-合併之後，倉庫還要自己打開 Pages，這個變更不會改 GitHub 設定：
-
-1. 打開倉庫 **Settings → Pages**。
-2. **Build and deployment → Source** 選 **GitHub Actions**（不要選 Deploy from a branch）。
-3. 等 `Deploy GitHub Pages` 這支 workflow 成功。第一次成功之後，上面的網址才會打開。
-
-若組織限制了 Actions 的部署權限，要允許這個倉庫用 GitHub Actions 部署到 Pages。
+若 Pages 的 Source 還沒指到這個分支，網址不會更新。需要能改設定的人到 **Settings → Pages → Build and deployment**，Source 選 **Deploy from a branch**，分支選 `gh-pages`、資料夾選 `/ (root)`。這個倉庫的 workflow 不會改 Settings。
 
 ## 怎麼加一個機器人
 

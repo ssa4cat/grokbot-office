@@ -1,6 +1,5 @@
-# 合併到 main 之後會建置並部署到 GitHub Pages。
-# 也可以在 Actions 頁面手動 Run workflow。
-# 這個檔案不會改倉庫的 Pages 設定；Source 仍要在 GitHub 上選 GitHub Actions。
+# push 到 main 或手動 Run workflow 時，建置並把 dist 推到 gh-pages 分支。
+# 不使用 GitHub Pages 的 deploy-pages，因此不必把 Source 設成 GitHub Actions。
 name: Deploy GitHub Pages
 
 on:
@@ -9,16 +8,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,22 +23,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm run build
         env:
           VITE_BASE: /grokbot-office/
-      - uses: actions/upload-pages-artifact@v3
+      - run: touch dist/.nojekyll
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
