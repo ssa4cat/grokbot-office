@@ -62,7 +62,7 @@ export interface LinkInput {
   to: string;
   kind?: LinkKind;
   label?: string;
-  /** article stays on the desk arcs; slides uses the lower corridor so the two lines do not cross. */
+  /** article is the purple line; slides is the teal line. Both follow the corridors. */
   pipeline?: string;
 }
 
@@ -127,6 +127,20 @@ export interface ReservedSlot {
   height: number;
 }
 
+export interface CorridorBand {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface OfficeCorridors {
+  rowGap: number;
+  spine: number;
+  horizontals: CorridorBand[];
+  vertical: CorridorBand | null;
+}
+
 export interface OfficeLayout {
   width: number;
   height: number;
@@ -141,6 +155,7 @@ export interface OfficeLayout {
   zones: PlacedZone[];
   reserved: ReservedSlot[];
   seats: Array<{ agentId: string; zoneId: string; x: number; y: number }>;
+  corridors: OfficeCorridors;
 }
 
 export interface AgentProfile {
@@ -331,14 +346,33 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   const columns = config.office.columns;
   const padding = 18;
   const headerHeight = 78;
-  const gap = 12;
-  const hasSouthLane = config.links.some((link) => link.pipeline === "slides");
-  const amenityGap = hasSouthLane ? 56 : 12;
-  const amenityH = 112;
+  const rowGap = 24;
+  const colGap = 8;
+  const spine = 24;
+  const amenityGap = 16;
+  const amenityH = 124;
+  const centerSplit = Math.floor(columns / 2);
+  const gapAfterCol = (col: number) => (col + 1 === centerSplit ? spine : colGap);
+  const originX = (col: number) => {
+    let x = padding;
+    for (let i = 0; i < col; i++) x += cellW + gapAfterCol(i);
+    return x;
+  };
+  const spanW = (col: number, colSpan: number) => {
+    let width = 0;
+    for (let i = 0; i < colSpan; i++) {
+      width += cellW;
+      if (i < colSpan - 1) width += gapAfterCol(col + i);
+    }
+    return width;
+  };
   const targetWidth = 1440;
   const minCellW = 220;
   const maxCellW = 340;
-  const natural = (targetWidth - padding * 2 - gap * Math.max(0, columns - 1)) / columns;
+  const gapCount = Math.max(0, columns - 1);
+  const spineCount = centerSplit > 0 && centerSplit < columns ? 1 : 0;
+  const totalColGap = colGap * (gapCount - spineCount) + spine * spineCount;
+  const natural = (targetWidth - padding * 2 - totalColGap) / columns;
   const cellW = Math.max(minCellW, Math.min(maxCellW, Math.floor(natural)));
 
   const occupied = new Set<string>();
@@ -418,10 +452,12 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   }
   const cellH = rowCount > 2 ? 210 : 248;
 
-  const gridWidth = columns * cellW + Math.max(0, columns - 1) * gap;
-  const width = padding * 2 + gridWidth;
   const gridTop = padding + headerHeight;
-  const gridHeight = rowCount * cellH + Math.max(0, rowCount - 1) * gap;
+  const originY = (row: number) => gridTop + row * (cellH + rowGap);
+  const spanH = (rowSpan: number) => rowSpan * cellH + Math.max(0, rowSpan - 1) * rowGap;
+  const gridWidth = originX(columns) - padding;
+  const width = padding * 2 + gridWidth;
+  const gridHeight = rowCount * cellH + Math.max(0, rowCount - 1) * rowGap;
   const amenityY = gridTop + gridHeight + amenityGap;
   const height = amenityY + amenityH + padding;
 
@@ -438,10 +474,10 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
       row: draft.row,
       colSpan: draft.colSpan,
       rowSpan: draft.rowSpan,
-      x: padding + draft.col * (cellW + gap),
-      y: gridTop + draft.row * (cellH + gap),
-      width: draft.colSpan * cellW + (draft.colSpan - 1) * gap,
-      height: draft.rowSpan * cellH + (draft.rowSpan - 1) * gap,
+      x: originX(draft.col),
+      y: originY(draft.row),
+      width: spanW(draft.col, draft.colSpan),
+      height: spanH(draft.rowSpan),
     };
   });
 
@@ -455,8 +491,8 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
   const reserved: ReservedSlot[] = reservedDrafts.map((slot) => ({
     col: slot.col,
     row: slot.row,
-    x: padding + slot.col * (cellW + gap),
-    y: gridTop + slot.row * (cellH + gap),
+    x: originX(slot.col),
+    y: originY(slot.row),
     width: cellW,
     height: cellH,
   }));
@@ -472,6 +508,20 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     }));
   });
 
+  const horizontals: CorridorBand[] = [];
+  for (let row = 0; row < rowCount - 1; row++) {
+    horizontals.push({
+      x: padding,
+      y: gridTop + (row + 1) * cellH + row * rowGap,
+      width: gridWidth,
+      height: rowGap,
+    });
+  }
+  const vertical: CorridorBand | null =
+    spineCount > 0
+      ? { x: originX(centerSplit) - spine, y: gridTop, width: spine, height: gridHeight }
+      : null;
+
   return {
     width,
     height,
@@ -486,6 +536,7 @@ export function layoutTeam(config: TeamConfig): OfficeLayout {
     zones,
     reserved,
     seats,
+    corridors: { rowGap, spine, horizontals, vertical },
   };
 }
 
@@ -557,14 +608,14 @@ export function linkAppearance(link: { kind?: string; pipeline?: string }): {
   const pipeline = link.pipeline && link.pipeline.length > 0 ? link.pipeline : "article";
   const returning = link.kind === "return";
   if (pipeline === "slides") {
-    return { pipeline, color: returning ? "#e879f9" : "#7c3aed", dashed: returning, curve: -1, corridor: true };
+    return { pipeline, color: "#6FB7C8", dashed: returning, curve: 1, corridor: true };
   }
   return {
     pipeline,
-    color: returning ? "#fb923c" : "#22d3ee",
+    color: "#A78BFA",
     dashed: returning,
-    curve: returning ? -1 : 1,
-    corridor: false,
+    curve: 1,
+    corridor: true,
   };
 }
 
@@ -583,6 +634,7 @@ function emptyLayout(): OfficeLayout {
     zones: [],
     reserved: [],
     seats: [],
+    corridors: { rowGap: 24, spine: 24, horizontals: [], vertical: null },
   };
 }
 

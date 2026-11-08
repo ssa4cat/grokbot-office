@@ -1,67 +1,69 @@
 import { useId } from "react";
 
-interface ConnectionLineProps {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  strength: number;
-  color?: string;
-  curve?: number;
-  dashed?: boolean;
-  /** Extra corners between the endpoints. Used by the slides corridor. */
-  waypoints?: Array<{ x: number; y: number }>;
+interface Pt {
+  x: number;
+  y: number;
 }
 
-export function ConnectionLine({
-  x1,
-  y1,
-  x2,
-  y2,
-  strength,
-  color = "#38bdf8",
-  curve = 1,
-  dashed = false,
-  waypoints,
-}: ConnectionLineProps) {
-  const rawId = useId().replace(/:/g, "");
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (!Number.isFinite(dist) || dist < 1) return null;
+interface ConnectionLineProps {
+  points: Pt[];
+  color: string;
+  dashed?: boolean;
+  hot?: boolean;
+}
 
-  let pathData: string;
-  if (waypoints && waypoints.length > 0) {
-    pathData = `M ${x1} ${y1} ${waypoints.map((point) => `L ${point.x} ${point.y}`).join(" ")} L ${x2} ${y2}`;
-  } else {
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
-    const offset = Math.min(dist * 0.22, 64) * curve;
-    const cx = midX - (dy / dist) * offset;
-    const cy = midY + (dx / dist) * offset;
-    pathData = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+function rounded(points: Pt[], radius = 8): string {
+  if (points.length < 2) return "";
+  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let index = 1; index < points.length - 1; index++) {
+    const prev = points[index - 1];
+    const corner = points[index];
+    const next = points[index + 1];
+    const inX = corner.x - prev.x;
+    const inY = corner.y - prev.y;
+    const outX = next.x - corner.x;
+    const outY = next.y - corner.y;
+    const inLen = Math.hypot(inX, inY);
+    const outLen = Math.hypot(outX, outY);
+    const trim = Math.min(radius, inLen / 2, outLen / 2);
+    if (trim < 0.5) {
+      path += ` L ${corner.x} ${corner.y}`;
+      continue;
+    }
+    const enter = { x: corner.x - (inX / inLen) * trim, y: corner.y - (inY / inLen) * trim };
+    const leave = { x: corner.x + (outX / outLen) * trim, y: corner.y + (outY / outLen) * trim };
+    path += ` L ${enter.x} ${enter.y} Q ${corner.x} ${corner.y} ${leave.x} ${leave.y}`;
   }
-  const opacity = Math.max(0.55, Math.min(1, strength));
-  const markerId = `arrow-${rawId}`;
+  const last = points[points.length - 1];
+  path += ` L ${last.x} ${last.y}`;
+  return path;
+}
 
+export function ConnectionLine({ points, color, dashed = false, hot = false }: ConnectionLineProps) {
+  const rawId = useId().replace(/:/g, "");
+  if (points.length < 2) return null;
+  const pathData = rounded(points, 8);
+  const markerId = `arrow-${rawId}`;
   return (
     <g style={{ pointerEvents: "none" }}>
-      <defs>
-        <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill={color} />
-        </marker>
-      </defs>
-      <path d={pathData} fill="none" stroke={color} strokeWidth={5} opacity={0.16} />
+      {hot && (
+        <defs>
+          <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill={color} />
+          </marker>
+        </defs>
+      )}
       <path
         d={pathData}
         fill="none"
         stroke={color}
-        strokeWidth={dashed ? 2 : 2.6}
-        strokeDasharray={dashed ? "7 6" : "10 7"}
+        strokeWidth={hot ? 3.5 : 2}
+        strokeDasharray={dashed ? "6 4" : undefined}
         strokeLinecap="round"
-        opacity={opacity}
-        markerEnd={`url(#${markerId})`}
-        style={{ animation: "dash-flow 1.1s linear infinite" }}
+        strokeLinejoin="round"
+        opacity={hot ? 1 : 0.35}
+        markerEnd={hot ? `url(#${markerId})` : undefined}
       />
     </g>
   );

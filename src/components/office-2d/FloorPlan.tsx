@@ -1,30 +1,109 @@
-import type { ReactNode } from "react";
-import { useTranslation } from "react-i18next";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plant } from "@/components/office-2d/furniture/Plant";
 import { CoffeeCup } from "@/components/office-2d/furniture/CoffeeCup";
 import { RobotMarker } from "@/components/office-2d/RobotMarker";
 import { ConnectionLine } from "@/components/office-2d/ConnectionLine";
+import { doorEdge } from "@/data/corridors";
+import { routeLinks } from "@/data/corridors";
 import { linkAppearance, staticOffice, type Furnishing, type PlacedZone } from "@/data/layout-office";
 import { useOfficeStore } from "@/store/office-store";
 
+const RUG: Record<string, string> = {
+  research: "#CDE8F2",
+  writing: "#D9DCF7",
+  editing: "#F8E3C2",
+  studio: "#F7D3DD",
+  review: "#E2D6F2",
+  command: "#CFEFEA",
+  workstation: "#D6EFDD",
+  lab: "#F5D5D5",
+  slides: "#E4DAF3",
+};
+
+const NAME: Record<string, string> = {
+  research: "#226A88",
+  writing: "#4549B6",
+  editing: "#8F5B14",
+  studio: "#A8395B",
+  review: "#7247B7",
+  command: "#21726B",
+  workstation: "#2D7444",
+  lab: "#A93B3B",
+  slides: "#6A49BB",
+};
+
+const NAME_NIGHT: Record<string, string> = {
+  research: "#C2D7E0",
+  writing: "#C5C6DD",
+  editing: "#E3D4BF",
+  studio: "#DEC4CC",
+  review: "#CEC5DD",
+  command: "#C3DFDD",
+  workstation: "#C5DDCD",
+  lab: "#DEC5C5",
+  slides: "#CCC5DD",
+};
+
+const RUG_NIGHT: Record<string, string> = {
+  research: "#306072",
+  writing: "#3F4AA9",
+  editing: "#765522",
+  studio: "#93334E",
+  review: "#654491",
+  command: "#32685F",
+  workstation: "#376744",
+  lab: "#8E3838",
+  slides: "#60438D",
+};
+
+function rugFill(kind: string, dark: boolean): string {
+  if (dark) return RUG_NIGHT[kind] ?? "#4A4036";
+  return RUG[kind] ?? "#E7E1D8";
+}
+
 export function FloorPlan() {
-  const { t } = useTranslation("office");
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
   const theme = useOfficeStore((s) => s.theme);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
+  const activeHandoff = useOfficeStore((s) => s.activeHandoff);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
+  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [unit, setUnit] = useState(0.67);
+  const px = (cssPx: number) => cssPx / unit;
   const isDark = theme === "dark";
   const layout = staticOffice.layout;
+  const floor = isDark ? "#3A332C" : "#E8D9C4";
+  const wall = isDark ? "#4A433B" : "#F4F1EC";
+  const wallEdge = isDark ? "#2E2924" : "#CDBBA2";
+  const corridor = isDark ? "#4A4036" : "#F1E6D6";
+  const grain = isDark ? "#2E2924" : "#DCCAB1";
+  useLayoutEffect(() => {
+    const node = svgRef.current;
+    if (!node) return;
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      const box = node.viewBox.baseVal;
+      if (!rect.width || !rect.height || !box.width || !box.height) return;
+      const scale = Math.min(rect.width / box.width, rect.height / box.height);
+      if (scale > 0) setUnit((current) => (Math.abs(current - scale) < 0.01 ? current : scale));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [layout.width, layout.height]);
 
-  const card = isDark ? "#0f172a" : "#ffffff";
-  const ink = isDark ? "#e2e8f0" : "#1e293b";
-  const muted = isDark ? "#94a3b8" : "#64748b";
-  const floor = isDark ? "#111827" : "#f8fbff";
+  const routed = useMemo(
+    () => routeLinks(layout, links.map((link) => ({ sourceId: link.sourceId, targetId: link.targetId, kind: link.kind, pipeline: link.pipeline }))),
+    [layout, links],
+  );
 
   return (
-    <div className={`flex h-full w-full items-center justify-center overflow-hidden ${isDark ? "bg-slate-950" : "bg-sky-100"}`}>
+    <div className={`relative flex h-full w-full items-center justify-center overflow-hidden ${isDark ? "bg-[#241f1b]" : "bg-[#f3efe8]"}`}>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-full w-full"
         preserveAspectRatio="xMidYMid meet"
@@ -34,125 +113,127 @@ export function FloorPlan() {
         style={{ fontFamily: '"Noto Sans CJK TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif' }}
       >
         <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={isDark ? "#0b1220" : "#d7f0ff"} />
-            <stop offset="100%" stopColor={isDark ? "#111827" : "#eef7ff"} />
-          </linearGradient>
-          <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#e0f6ff" />
-            <stop offset="100%" stopColor="#7dd3fc" />
-          </linearGradient>
-          <filter id="card-shadow" x="-8%" y="-8%" width="116%" height="124%">
-            <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity={isDark ? 0.35 : 0.08} />
-          </filter>
-          <filter id="holo-glow" x="-40%" y="-40%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#22d3ee" floodOpacity="0.7" />
-          </filter>
+          <clipPath id="floor-clip">
+            <rect x={8} y={8} width={layout.width - 16} height={layout.height - 16} rx={18} />
+          </clipPath>
         </defs>
 
-        <rect width={layout.width} height={layout.height} fill="url(#sky)" />
-        <rect
-          x={8}
-          y={8}
-          width={layout.width - 16}
-          height={layout.height - 16}
-          rx={28}
-          fill={floor}
-          stroke={isDark ? "#334155" : "#bae6fd"}
-          strokeWidth={3}
-        />
+        <g clipPath="url(#floor-clip)">
+          <rect width={layout.width} height={layout.height} fill={floor} />
+          {Array.from({ length: Math.ceil(layout.height / 16) }, (_, index) => (
+            <line key={index} x1={0} y1={index * 16} x2={layout.width} y2={index * 16} stroke={grain} strokeWidth={1} />
+          ))}
 
-        <OfficeHeader layout={layout} muted={muted} isDark={isDark} />
-
-        {layout.reserved.map((slot) => (
-          <g key={`reserved-${slot.col}-${slot.row}`}>
+          {layout.corridors.horizontals.map((band) => (
+            <rect key={`h-${band.y}`} x={band.x} y={band.y} width={band.width} height={band.height} fill={corridor} />
+          ))}
+          {layout.corridors.vertical && (
             <rect
-              x={slot.x + 8}
-              y={slot.y + 8}
-              width={slot.width - 16}
-              height={slot.height - 16}
-              rx={16}
-              fill={isDark ? "#1e1b2e" : "#f5f3ff"}
-              stroke="#a78bfa"
-              strokeWidth={2}
-              strokeDasharray="10 8"
+              x={layout.corridors.vertical.x}
+              y={layout.corridors.vertical.y}
+              width={layout.corridors.vertical.width}
+              height={layout.corridors.vertical.height}
+              fill={corridor}
             />
-            <text x={slot.x + 20} y={slot.y + 32} fill={muted} fontSize={13} fontWeight={700}>
-              預留
-            </text>
-          </g>
-        ))}
+          )}
 
-        {layout.zones.map((zone) => {
-          const zoneAgents = staticOffice.profiles.filter((profile) => profile.zoneId === zone.id);
-          const selected = zoneAgents.some((profile) => profile.id === selectedAgentId);
-          return (
-            <g key={zone.id} filter="url(#card-shadow)">
-              <rect
-                x={zone.x}
-                y={zone.y}
-                width={zone.width}
-                height={zone.height}
-                rx={18}
-                fill={card}
-                stroke={zone.accent}
-                strokeWidth={selected ? 3 : 1.4}
-                opacity={1}
+          {layout.zones.map((zone) => (
+            <rect
+              key={`rug-${zone.id}`}
+              x={zone.x + 8}
+              y={zone.y + 8}
+              width={zone.width - 16}
+              height={zone.height - 16}
+              rx={6}
+              fill={rugFill(zone.furnishing, isDark)}
+            />
+          ))}
+          <rect
+            x={layout.amenity.x + 8}
+            y={layout.amenity.y + 8}
+            width={layout.amenity.width - 16}
+            height={layout.amenity.height - 16}
+            rx={6}
+            fill={isDark ? "#5C4332" : "#F3D3AE"}
+          />
+
+          {layout.zones.map((zone) => (
+            <ZoneWalls key={`wall-${zone.id}`} zone={zone} fill={wall} edge={wallEdge} />
+          ))}
+
+          <OfficeHeader layout={layout} isDark={isDark} />
+
+          {layout.zones.map((zone) => {
+            const selected = staticOffice.profiles.some((profile) => profile.zoneId === zone.id && profile.id === selectedAgentId);
+            const showCopy = hoveredZone === zone.id || selected;
+            return (
+              <g
+                key={zone.id}
+                onMouseEnter={() => setHoveredZone(zone.id)}
+                onMouseLeave={() => setHoveredZone((current) => (current === zone.id ? null : current))}
                 onClick={(event) => {
                   event.stopPropagation();
-                  const first = zoneAgents[0];
+                  const first = staticOffice.profiles.find((profile) => profile.zoneId === zone.id);
                   if (first) selectAgent(first.id);
                 }}
-                style={{ cursor: zoneAgents.length > 0 ? "pointer" : "default" }}
+                style={{ cursor: "pointer" }}
+              >
+                <ZoneFurniture zone={zone} px={px} />
+                <ZonePlant zone={zone} />
+                <text x={zone.x + 16} y={zone.y + px(22)} fill={(isDark ? NAME_NIGHT : NAME)[zone.id] ?? "#4A4F57"} fontSize={px(14)} fontWeight={700}>
+                  {zone.name}
+                </text>
+                {showCopy && (
+                  <text x={zone.x + 16} y={zone.y + px(38)} fill={isDark ? "#E7E1D8" : "#6B6258"} fontSize={px(11)}>
+                    {zone.summary}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          {layout.reserved.map((slot) => (
+            <g key={`reserved-${slot.col}-${slot.row}`}>
+              <rect
+                x={slot.x + 10}
+                y={slot.y + 10}
+                width={slot.width - 20}
+                height={slot.height - 20}
+                rx={6}
+                fill="none"
+                stroke="#CDBBA2"
+                strokeWidth={1.5}
+                strokeDasharray="7 6"
               />
-              <text x={zone.x + 16} y={zone.y + 26} fill={zone.accent} fontSize={15} fontWeight={800}>
-                {zone.name}
+              <text
+                x={slot.x + slot.width / 2}
+                y={slot.y + slot.height / 2}
+                textAnchor="middle"
+                fill={isDark ? "#B5A898" : "#8C7F70"}
+                fontSize={px(12)}
+                fontWeight={700}
+              >
+                預留擴充
               </text>
-              <text x={zone.x + 16} y={zone.y + 44} fill={muted} fontSize={11}>
-                {zone.summary}
-              </text>
-              <ZoneFurniture zone={zone} isDark={isDark} />
-              <Plant x={zone.x + zone.width - 26} y={zone.y + zone.height - 34} />
             </g>
-          );
-        })}
+          ))}
 
-        {links.some((link) => linkAppearance(link).corridor) && (
-          <text
-            x={layout.padding + 8}
-            y={layout.amenity.y - 50}
-            fontSize={11}
-            fontWeight={700}
-            fill="#7c3aed"
-          >
-            {t("legendSlides")}
-          </text>
-        )}
+          <Lounge amenity={layout.amenity} isDark={isDark} px={px} />
+        </g>
 
-        {links.map((link) => {
-          const source = agents.get(link.sourceId);
-          const target = agents.get(link.targetId);
-          if (!source || !target) return null;
+        {routed.map((link) => {
           const look = linkAppearance(link);
-          const sourceZone = zoneForAgent(link.sourceId);
-          const targetZone = zoneForAgent(link.targetId);
-          const lane = corridorLane(link);
+          const hot =
+            selectedAgentId === link.sourceId ||
+            selectedAgentId === link.targetId ||
+            (activeHandoff?.sourceId === link.sourceId && activeHandoff?.targetId === link.targetId);
           return (
             <ConnectionLine
-              key={`${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`}
-              x1={source.position.x}
-              y1={source.position.y - 18}
-              x2={target.position.x}
-              y2={target.position.y - 18}
-              strength={link.strength}
+              key={`${look.pipeline}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`}
+              points={link.points}
               color={look.color}
-              curve={look.curve}
               dashed={look.dashed}
-              waypoints={
-                look.corridor && sourceZone && targetZone
-                  ? corridorWaypoints(source.position, target.position, sourceZone, targetZone, layout.amenity.y - 42 + lane * 8, layout.amenity.x + layout.amenity.width)
-                  : undefined
-              }
+              hot={hot}
             />
           );
         })}
@@ -171,225 +252,213 @@ export function FloorPlan() {
               status={agent.status}
               selected={selectedAgentId === profile.id}
               isDark={isDark}
+              pixelsPerUnit={unit}
               onSelect={() => selectAgent(profile.id)}
             />
           );
         })}
 
-        <AmenityStrip
-          amenity={layout.amenity}
-          isDark={isDark}
-          ink={ink}
-          muted={muted}
-          lounge={t("amenityLounge")}
-          coffee={t("amenityCoffee")}
-          legendFlow={t("legendFlow")}
-          legendReturn={t("legendReturn")}
-          legendArticle={t("legendArticle")}
-          legendSlides={t("legendSlides")}
-        />
+        {staticOffice.profiles.map((profile) => {
+          const agent = agents.get(profile.id);
+          if (!agent?.speechBubble) return null;
+          const text = agent.speechBubble.text;
+          const width = Math.min(168, Math.max(96, text.length * 12));
+          return (
+            <g key={`bubble-${profile.id}`} style={{ pointerEvents: "none" }}>
+              <rect x={agent.position.x - width / 2} y={agent.position.y - 58} width={width} height={28} rx={8} fill="#ffffff" stroke="#E7E1D8" />
+              <text x={agent.position.x} y={agent.position.y - 40} textAnchor="middle" fontSize={12} fill="#3F3A34">
+                {text}
+              </text>
+            </g>
+          );
+        })}
       </svg>
+
     </div>
   );
 }
 
-function OfficeHeader({
-  layout,
-  muted,
-  isDark,
-}: {
-  layout: typeof staticOffice.layout;
-  muted: string;
-  isDark: boolean;
-}) {
+function OfficeHeader({ layout, isDark }: { layout: typeof staticOffice.layout; isDark: boolean }) {
   const mid = layout.width / 2;
-  const windowY = layout.padding + 16;
+  const windowY = layout.padding + 18;
+  const windowFill = "#CFE6F5";
   return (
     <g>
       {[0, 1, 2].map((index) => (
-        <rect
-          key={`lw-${index}`}
-          x={layout.padding + 20 + index * 62}
-          y={windowY}
-          width={52}
-          height={36}
-          rx={8}
-          fill="url(#window)"
-          stroke="#7dd3fc"
-        />
+        <rect key={`lw-${index}`} x={layout.padding + 16 + index * 58} y={windowY} width={48} height={28} rx={4} fill={windowFill} stroke="#ffffff" strokeWidth={2} />
       ))}
       {[0, 1, 2].map((index) => (
-        <rect
-          key={`rw-${index}`}
-          x={layout.width - layout.padding - 196 + index * 62}
-          y={windowY}
-          width={52}
-          height={36}
-          rx={8}
-          fill="url(#window)"
-          stroke="#7dd3fc"
-        />
+        <rect key={`rw-${index}`} x={layout.width - layout.padding - 250 + index * 58} y={windowY} width={48} height={28} rx={4} fill={windowFill} stroke="#ffffff" strokeWidth={2} />
       ))}
-      <text x={mid} y={layout.padding + 36} textAnchor="middle" fontSize={28} fontWeight={800} letterSpacing={6} fill={isDark ? "#67e8f9" : "#0284c7"}>
+      <text x={mid} y={layout.padding + 34} textAnchor="middle" fontSize={26} fontWeight={800} letterSpacing={6} fill={isDark ? "#F4F1EC" : "#3F3A34"}>
         {layout.title}
       </text>
-      <text x={mid} y={layout.padding + 58} textAnchor="middle" fontSize={13} fontWeight={600} fill={muted}>
+      <text x={mid} y={layout.padding + 54} textAnchor="middle" fontSize={12} fontWeight={600} fill={isDark ? "#D6CBBC" : "#6B6258"}>
         {layout.subtitle}
       </text>
     </g>
   );
 }
 
-function zoneForAgent(agentId: string): PlacedZone | undefined {
-  const seat = staticOffice.layout.seats.find((item) => item.agentId === agentId);
-  return staticOffice.layout.zones.find((zone) => zone.id === seat?.zoneId);
-}
-
-function corridorLane(link: { sourceId: string; targetId: string; kind?: string; pipeline?: string }): number {
-  const lanes = staticOffice.links.filter((item) => linkAppearance(item).corridor);
-  const index = lanes.findIndex(
-    (item) => item.sourceId === link.sourceId && item.targetId === link.targetId && item.kind === link.kind && item.pipeline === link.pipeline,
-  );
-  return Math.max(0, index);
-}
-
-function corridorWaypoints(
-  source: { x: number; y: number },
-  target: { x: number; y: number },
-  sourceZone: PlacedZone,
-  targetZone: PlacedZone,
-  laneY: number,
-  gridRight: number,
-): Array<{ x: number; y: number }> {
-  const gutter = (zone: PlacedZone) => {
-    if (zone.width > gridRight * 0.7) return zone.x + 28;
-    const right = zone.x + zone.width + 6;
-    return right > gridRight - 2 ? zone.x - 6 : right;
-  };
-  const exitY = (zone: PlacedZone) => zone.y + zone.height - 12;
-  const g1 = gutter(sourceZone);
-  const g2 = gutter(targetZone);
-  return [
-    { x: source.x, y: exitY(sourceZone) },
-    { x: g1, y: exitY(sourceZone) },
-    { x: g1, y: laneY },
-    { x: g2, y: laneY },
-    { x: g2, y: exitY(targetZone) },
-    { x: target.x, y: exitY(targetZone) },
+function ZoneWalls({ zone, fill, edge }: { zone: PlacedZone; fill: string; edge: string }) {
+  const seat = staticOffice.layout.seats.find((item) => item.zoneId === zone.id);
+  const side = doorEdge(zone, staticOffice.layout);
+  const doorX = Math.max(zone.x + 20, Math.min(zone.x + zone.width - 20, seat?.x ?? zone.x + zone.width / 2));
+  const { x, y, width, height } = zone;
+  const gap = 20;
+  const parts: Array<[number, number, number, number]> = [
+    [x, y, x + width, y],
+    [x, y + height, x + width, y + height],
+    [x, y, x, y + height],
+    [x + width, y, x + width, y + height],
   ];
-}
-
-function ZoneFurniture({ zone, isDark }: { zone: PlacedZone; isDark: boolean }) {
-  const cx = zone.x + zone.width / 2;
-  const cy = zone.y + zone.height * 0.56;
+  if (side === "top") parts[0] = [x, y, doorX - gap / 2, y];
+  if (side === "bottom") parts[1] = [x, y + height, doorX - gap / 2, y + height];
+  const extra: Array<[number, number, number, number]> = [];
+  if (side === "top") extra.push([doorX + gap / 2, y, x + width, y]);
+  if (side === "bottom") extra.push([doorX + gap / 2, y + height, x + width, y + height]);
   return (
-    <g transform={`translate(${cx}, ${cy})`}>
-      <Furniture kind={zone.furnishing} accent={zone.accent} isDark={isDark} />
-    </g>
-  );
-}
-
-function Furniture({ kind, accent, isDark }: { kind: Furnishing; accent: string; isDark: boolean }) {
-  const desk = isDark ? "#1e293b" : "#f8fafc";
-  const edge = isDark ? "#334155" : "#e2e8f0";
-  if (kind === "slides") {
-    return (
-      <g>
-        <HoloScreen accent={accent} w={210} h={72} y={-24}>
-          <rect x={-88} y={-60} width={70} height={8} rx={2} fill={accent} />
-          <rect x={-88} y={-44} width={22} height={28} rx={2} fill="#ddd6fe" />
-          <rect x={-60} y={-52} width={22} height={36} rx={2} fill={accent} />
-          <rect x={-32} y={-36} width={22} height={20} rx={2} fill="#c4b5fd" />
-        </HoloScreen>
-        <g transform="translate(180, -16)">
-          <rect x={-40} y={-36} width={80} height={52} rx={6} fill="#faf5ff" stroke={accent} />
-          <rect x={-26} y={-24} width={52} height={6} rx={2} fill={accent} />
-          <rect x={-26} y={-12} width={36} height={4} rx={2} fill="#ddd6fe" />
-          <rect x={-26} y={-4} width={44} height={4} rx={2} fill="#ddd6fe" />
+    <g strokeLinecap="butt">
+      {[...parts, ...extra].map((line) => (
+        <g key={line.join(",")}>
+          <line x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke={edge} strokeWidth={8} />
+          <line x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke={fill} strokeWidth={6} />
         </g>
-      </g>
-    );
-  }
+      ))}
+    </g>
+  );
+}
 
-  if (kind === "command") {
+function ZonePlant({ zone }: { zone: PlacedZone }) {
+  const corners = [
+    { fx: 0.14, fy: 0.78, scale: 1 },
+    { fx: 0.86, fy: 0.22, scale: 0.72 },
+    { fx: 0.16, fy: 0.24, scale: 1 },
+    { fx: 0.84, fy: 0.78, scale: 0.72 },
+  ];
+  const spot = corners[(zone.col + zone.row * 2) % corners.length];
+  return (
+    <g transform={`translate(${zone.x + zone.width * spot.fx}, ${zone.y + zone.height * spot.fy}) scale(${spot.scale})`}>
+      <Plant x={0} y={0} />
+    </g>
+  );
+}
+
+function ZoneFurniture({ zone, px }: { zone: PlacedZone; px: (cssPx: number) => number }) {
+  const boxH = Math.max(zone.height * 0.34, 68);
+  const top = zone.y + 46;
+  const left = zone.x + 28;
+  const width = Math.min(zone.width - 56, zone.furnishing === "slides" ? zone.width * 0.7 : 220);
+  return <Furniture kind={zone.furnishing} x={left} y={top} width={width} height={boxH} zone={zone} px={px} />;
+}
+
+function Furniture({
+  kind,
+  x,
+  y,
+  width,
+  height,
+  zone,
+  px,
+}: {
+  kind: Furnishing;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zone: PlacedZone;
+  px: (cssPx: number) => number;
+}) {
+  const wood = "#C89F74";
+  const metal = "#4A4F57";
+  if (kind === "slides") {
+    const screenW = zone.width * 0.4;
+    const screenX = zone.x + (zone.width - screenW) / 2;
+    const screenY = zone.y + px(28);
+    const screenH = px(10);
+    const chair = px(14);
+    const gap = px(6);
+    const aisle = px(16);
+    const rowW = chair * 3 + gap * 2 + aisle;
+    const rowX = screenX + (screenW - rowW) / 2;
     return (
       <g>
-        <ellipse cx={0} cy={46} rx={54} ry={16} fill={accent} opacity={0.18} />
-        <ellipse cx={0} cy={46} rx={36} ry={10} fill={isDark ? "#155e75" : "#cffafe"} stroke={accent} />
-        <HoloScreen accent={accent} w={78} h={58} y={-8}>
-          <CheckRow y={-48} done />
-          <CheckRow y={-34} done />
-          <CheckRow y={-20} done={false} />
-        </HoloScreen>
+        <rect x={screenX} y={screenY} width={screenW} height={screenH} rx={2} fill="#FFFFFF" stroke="#CDBBA2" />
+        {[0, 1, 2].map((index) => (
+          <rect
+            key={index}
+            x={screenX + screenW * 0.28 + index * (screenW * 0.16)}
+            y={screenY + screenH * 0.2}
+            width={screenW * 0.1}
+            height={screenH * 0.6}
+            rx={1}
+            fill={["#8B5CF6", "#A78BFA", "#C4B5FD"][index]}
+          />
+        ))}
+        {[0, 1].map((row) =>
+          [0, 1, 2].map((col) => {
+            const extra = col > 1 ? aisle : 0;
+            return (
+              <rect
+                key={`${row}-${col}`}
+                x={rowX + col * (chair + gap) + extra}
+                y={screenY + screenH + px(12) + row * (chair + gap)}
+                width={chair}
+                height={chair}
+                rx={px(3)}
+                fill="#C89F74"
+              />
+            );
+          }),
+        )}
+        <rect x={zone.x + px(22)} y={screenY + screenH + px(16)} width={px(20)} height={px(14)} rx={2} fill={wood} stroke={metal} />
       </g>
     );
   }
-
-  return (
-    <g>
-      <rect x={-62} y={18} width={124} height={40} rx={10} fill={desk} stroke={edge} />
-      <rect x={-62} y={52} width={124} height={8} rx={3} fill={edge} />
-      {kind === "studio" ? <Easel accent={accent} /> : kind === "lab" ? <LabBench accent={accent} /> : (
-        <HoloScreen accent={accent} w={70} h={48} y={-6}>
-          <ScreenContent kind={kind} accent={accent} />
-        </HoloScreen>
-      )}
-    </g>
-  );
-}
-
-function HoloScreen({
-  accent,
-  w,
-  h,
-  y,
-  children,
-}: {
-  accent: string;
-  w: number;
-  h: number;
-  y: number;
-  children: ReactNode;
-}) {
-  return (
-    <g filter="url(#holo-glow)" transform={`translate(0, ${y})`}>
-      <rect x={-w / 2} y={-h} width={w} height={h} rx={8} fill="#ecfeff" stroke={accent} strokeWidth={1.6} opacity={0.95} />
-      {children}
-    </g>
-  );
-}
-
-function CheckRow({ y, done }: { y: number; done: boolean }) {
-  return (
-    <g>
-      <rect x={-30} y={y} width={10} height={10} rx={2} fill={done ? "#22c55e" : "#fdba74"} />
-      {done ? (
-        <path d={`M -28 ${y + 5} l 2.4 2.4 l 4.6 -5`} fill="none" stroke="#fff" strokeWidth={1.4} />
-      ) : (
-        <path d={`M -28 ${y + 2} l 6 6 M -22 ${y + 2} l -6 6`} fill="none" stroke="#fff" strokeWidth={1.3} />
-      )}
-      <rect x={-16} y={y + 3} width={36} height={4} rx={2} fill={done ? "#67e8f9" : "#fed7aa"} />
-    </g>
-  );
-}
-
-function ScreenContent({ kind, accent }: { kind: Furnishing; accent: string }) {
+  if (kind === "command") {
+    const diameter = zone.height * 0.3;
+    const cx = zone.x + zone.width / 2;
+    const cy = zone.y + zone.height * 0.58;
+    return (
+      <g>
+        <ellipse cx={cx} cy={cy} rx={diameter * 0.62} ry={diameter * 0.4} fill="#7DD3C7" opacity={0.35} />
+        <ellipse cx={cx} cy={cy} rx={diameter * 0.42} ry={diameter * 0.28} fill={wood} />
+        {[-1, 0, 1].map((offset) => (
+          <rect
+            key={offset}
+            x={cx - px(9) + offset * px(26)}
+            y={cy - diameter * 0.55}
+            width={px(18)}
+            height={px(10)}
+            rx={2}
+            fill="#9FD8FF"
+            stroke={metal}
+          />
+        ))}
+      </g>
+    );
+  }
   if (kind === "research") {
     return (
       <g>
-        <circle cx={16} cy={-24} r={10} fill="none" stroke={accent} strokeWidth={1.4} />
-        <path d="M 8 -24 H 24 M 16 -32 V -16" stroke={accent} strokeWidth={1} />
-        <rect x={-28} y={-18} width={6} height={14} fill={accent} opacity={0.8} />
-        <rect x={-20} y={-26} width={6} height={22} fill="#818cf8" />
-        <rect x={-12} y={-12} width={6} height={8} fill="#34d399" />
+        <rect x={x} y={y + 8} width={width * 0.62} height={height * 0.85} rx={2} fill={wood} />
+        <rect x={x + width * 0.46} y={y} width={width * 0.4} height={height * 0.62} rx={2} fill={wood} />
+        <rect x={x + 10} y={y + 4} width={28} height={18} rx={2} fill="#9FD8FF" stroke={metal} />
+        <rect x={x + 44} y={y + 4} width={28} height={18} rx={2} fill="#9FD8FF" stroke={metal} />
+        <rect x={x + width * 0.78} y={y + height * 0.5} width={22} height={height * 0.4} rx={2} fill="#F4F1EC" stroke={metal} />
+        <rect x={x + width * 0.78 + 26} y={y + height * 0.5} width={22} height={height * 0.4} rx={2} fill="#F4F1EC" stroke={metal} />
       </g>
     );
   }
   if (kind === "writing") {
     return (
       <g>
-        {[0, 1, 2, 3].map((row) => (
-          <rect key={row} x={-26} y={-38 + row * 8} width={row === 3 ? 28 : 48} height={4} rx={2} fill="#67e8f9" />
+        <rect x={x} y={y + 10} width={width * 0.7} height={height * 0.85} rx={2} fill={wood} />
+        <rect x={x + 16} y={y} width={36} height={24} rx={2} fill="#2E3138" />
+        <rect x={x + 18} y={y + 2} width={32} height={16} rx={1} fill="#9FD8FF" />
+        <rect x={x + width * 0.62} y={y + height * 0.15} width={18} height={height * 0.7} rx={2} fill={wood} />
+        {[0, 1, 2, 3].map((index) => (
+          <rect key={index} x={x + width * 0.64} y={y + height * 0.22 + index * 10} width={12} height={8} rx={1} fill={["#CDE8F2", "#F7D3DD", "#F8E3C2", "#D6EFDD"][index]} />
         ))}
       </g>
     );
@@ -397,130 +466,117 @@ function ScreenContent({ kind, accent }: { kind: Furnishing; accent: string }) {
   if (kind === "editing") {
     return (
       <g>
-        <rect x={-26} y={-38} width={48} height={4} rx={2} fill="#fecaca" />
-        <rect x={-26} y={-28} width={40} height={4} rx={2} fill="#86efac" />
-        <rect x={-26} y={-18} width={46} height={4} rx={2} fill="#fde68a" />
-        <path d="M 16 -16 l 4 4 l 8 -10" fill="none" stroke="#16a34a" strokeWidth={2} />
+        <rect x={x} y={y + 12} width={width * 0.72} height={height * 0.82} rx={2} fill={wood} />
+        <rect x={x + 12} y={y + 28} width={16} height={22} rx={2} fill="#F4F1EC" stroke={metal} />
+        <rect x={x + 32} y={y + 32} width={16} height={18} rx={2} fill="#F8E3C2" stroke={metal} />
+        <rect x={x + width * 0.55} y={y} width={width * 0.38} height={height * 0.42} rx={2} fill="#C9A27A" />
+        <rect x={x + width * 0.6} y={y + 6} width={12} height={10} rx={1} fill="#F8E3C2" />
+        <rect x={x + width * 0.72} y={y + 8} width={12} height={10} rx={1} fill="#F7D3DD" />
+        <rect x={x + width * 0.64} y={y + 20} width={14} height={10} rx={1} fill="#D9DCF7" />
+      </g>
+    );
+  }
+  if (kind === "studio") {
+    const easelH = zone.height * 0.3;
+    const topY = zone.y + zone.height * 0.34;
+    const palette = px(16);
+    return (
+      <g>
+        <path d={`M ${x + 36} ${topY + easelH} L ${x + 54} ${topY} L ${x + 72} ${topY + easelH}`} fill="none" stroke={wood} strokeWidth={px(3)} />
+        <rect x={x + 42} y={topY + easelH * 0.12} width={px(28)} height={easelH * 0.62} rx={2} fill="#FFFFFF" stroke="#F472B6" />
+        <circle cx={x + width * 0.62} cy={topY + easelH * 0.7} r={palette / 2} fill="#F4F1EC" stroke={metal} />
+        <circle cx={x + width * 0.58} cy={topY + easelH * 0.64} r={palette * 0.16} fill="#F7D3DD" />
+        <circle cx={x + width * 0.66} cy={topY + easelH * 0.74} r={palette * 0.16} fill="#CDE8F2" />
       </g>
     );
   }
   if (kind === "review") {
     return (
       <g>
-        <rect x={-28} y={-40} width={22} height={28} rx={3} fill="#fff" stroke={accent} />
-        <path d="M -22 -26 l 4 4 l 8 -8" fill="none" stroke="#16a34a" strokeWidth={1.8} />
-        <rect x={2} y={-40} width={22} height={28} rx={3} fill="#fff" stroke="#fb7185" />
-        <path d="M 8 -30 l 10 10 M 18 -30 l -10 10" stroke="#e11d48" strokeWidth={1.6} />
+        <rect x={x} y={y + 8} width={width * 0.62} height={height * 0.85} rx={2} fill="#FFFFFF" stroke="#CDBBA2" />
+        <rect x={x + 8} y={y + 24} width={width * 0.48} height={height * 0.28} rx={2} fill="#F4F1EC" />
+        {[0, 1, 2, 3].map((index) => (
+          <rect key={index} x={x + width * 0.7} y={y + index * 16} width={18} height={12} rx={2} fill={index % 2 ? "#E2D6F2" : "#F7D3DD"} stroke={metal} />
+        ))}
       </g>
     );
   }
-  return (
-    <g>
-      <rect x={-24} y={-36} width={48} height={6} rx={2} fill={accent} opacity={0.85} />
-      <rect x={-24} y={-26} width={32} height={4} rx={2} fill="#a5f3fc" />
-      <rect x={-24} y={-18} width={40} height={4} rx={2} fill="#a5f3fc" />
-    </g>
-  );
+  if (kind === "workstation") {
+    return (
+      <g>
+        <rect x={x} y={y + 10} width={width * 0.78} height={height * 0.8} rx={2} fill={wood} />
+        <rect x={x + 12} y={y + 28} width={16} height={16} rx={2} fill="#E7E1D8" />
+        <rect x={x + width * 0.55} y={y + 28} width={16} height={16} rx={2} fill="#E7E1D8" />
+        <rect x={x + width * 0.78} y={y + 8} width={18} height={height * 0.55} rx={2} fill="#2E3138" />
+        <rect x={x + width * 0.82} y={y + 14} width={6} height={10} rx={1} fill="#9FD8FF" />
+      </g>
+    );
+  }
+  if (kind === "lab") {
+    return (
+      <g>
+        <rect x={x} y={y + 8} width={width * 0.62} height={height * 0.8} rx={2} fill={wood} />
+        <rect x={x + width * 0.68} y={y + 6} width={14} height={height * 0.7} rx={2} fill={metal} />
+        <rect x={x + width * 0.64} y={y + height * 0.35} width={28} height={8} rx={2} fill="#F5D5D5" />
+        <rect x={x + 10} y={y + height * 0.7} width={width * 0.4} height={8} rx={1} fill="#F5D76E" />
+      </g>
+    );
+  }
+  return <rect x={x} y={y + 16} width={width * 0.6} height={height * 0.45} rx={2} fill={wood} />;
 }
 
-function Easel({ accent }: { accent: string }) {
-  return (
-    <g>
-      <path d="M 0 -52 L -28 16 H 28 Z" fill="none" stroke="#d6d3d1" strokeWidth={3} />
-      <rect x={-20} y={-44} width={40} height={32} rx={3} fill="#fff" stroke={accent} />
-      <circle cx={-8} cy={-32} r={5} fill="#f472b6" />
-      <circle cx={6} cy={-28} r={6} fill="#38bdf8" />
-      <circle cx={0} cy={-18} r={4} fill="#fbbf24" />
-    </g>
-  );
-}
-
-function LabBench({ accent }: { accent: string }) {
-  return (
-    <g>
-      <HoloScreen accent={accent} w={46} h={36} y={-4}>
-        <ellipse cx={0} cy={-18} rx={10} ry={12} fill="#fff" stroke={accent} />
-        <circle cx={0} cy={-16} r={3} fill={accent} />
-      </HoloScreen>
-      <rect x={28} y={-8} width={8} height={22} rx={3} fill="#bae6fd" stroke="#38bdf8" />
-      <rect x={40} y={-2} width={8} height={16} rx={3} fill="#fecdd3" stroke="#fb7185" />
-    </g>
-  );
-}
-
-function AmenityStrip({
+function Lounge({
   amenity,
   isDark,
-  ink,
-  muted,
-  lounge,
-  coffee,
-  legendFlow,
-  legendReturn,
-  legendArticle,
-  legendSlides,
+  px,
 }: {
   amenity: { x: number; y: number; width: number; height: number };
   isDark: boolean;
-  ink: string;
-  muted: string;
-  lounge: string;
-  coffee: string;
-  legendFlow: string;
-  legendReturn: string;
-  legendArticle: string;
-  legendSlides: string;
+  px: (cssPx: number) => number;
 }) {
   const { x, y, width, height } = amenity;
+  const piece = (size: number) => px(size * 1.3);
+  const sofa = isDark ? "#C4A27C" : "#B98A5E";
+  const sofaEdge = isDark ? "#E8D2B8" : "#8F6A48";
+  const table = isDark ? "#B89070" : "#8F6A48";
+  const shelf = isDark ? "#CDB08A" : "#9C7B5A";
+  const shelfLine = isDark ? "#6E5034" : "#7A5C40";
+  const top = y + 8;
+  const mid = x + width * 0.42;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} rx={18} fill={isDark ? "#1c1917" : "#fff7ed"} stroke={isDark ? "#44403c" : "#fed7aa"} />
-      <text x={x + 18} y={y + 22} fontSize={13} fontWeight={800} fill={ink}>
-        {lounge}
-      </text>
-      <text x={x + 78} y={y + 22} fontSize={11} fontWeight={700} fill={muted}>
-        {legendArticle}
-      </text>
-      <line x1={x + 112} y1={y + 18} x2={x + 140} y2={y + 18} stroke="#22d3ee" strokeWidth={3} />
-      <text x={x + 146} y={y + 22} fontSize={11} fill={muted}>
-        {legendFlow}
-      </text>
-      <line x1={x + 180} y1={y + 18} x2={x + 208} y2={y + 18} stroke="#fb923c" strokeWidth={3} strokeDasharray="4 3" />
-      <text x={x + 214} y={y + 22} fontSize={11} fill={muted}>
-        {legendReturn}
-      </text>
-      <text x={x + 258} y={y + 22} fontSize={11} fontWeight={700} fill="#7c3aed">
-        {legendSlides}
-      </text>
-      <line x1={x + 292} y1={y + 18} x2={x + 320} y2={y + 18} stroke="#7c3aed" strokeWidth={3} />
-      <text x={x + 326} y={y + 22} fontSize={11} fill={muted}>
-        {legendFlow}
-      </text>
-      <line x1={x + 360} y1={y + 18} x2={x + 388} y2={y + 18} stroke="#e879f9" strokeWidth={3} strokeDasharray="4 3" />
-      <text x={x + 394} y={y + 22} fontSize={11} fill={muted}>
-        {legendReturn}
-      </text>
-      <rect x={x + 18} y={y + 40} width={150} height={46} rx={12} fill={isDark ? "#44403c" : "#ffffff"} stroke="#fdba74" />
-      <rect x={x + 28} y={y + 50} width={36} height={26} rx={8} fill="#fb923c" />
-      <rect x={x + 70} y={y + 50} width={36} height={26} rx={8} fill="#fdba74" />
-      <rect x={x + 112} y={y + 50} width={36} height={26} rx={8} fill="#fed7aa" />
-      <text x={x + width - 248} y={y + 22} fontSize={13} fontWeight={800} fill={ink}>
-        {coffee}
-      </text>
-      <rect x={x + width - 250} y={y + 36} width={150} height={52} rx={10} fill={isDark ? "#292524" : "#fff"} stroke="#fdba74" />
-      <rect x={x + width - 236} y={y + 28} width={28} height={22} rx={4} fill="#57534e" />
-      <circle cx={x + width - 222} cy={y + 24} r={3} fill="#22d3ee" />
-      <CoffeeCup x={x + width - 180} y={y + 58} />
-      <CoffeeCup x={x + width - 150} y={y + 58} />
-      <CoffeeCup x={x + width - 120} y={y + 58} />
-      <g>
-        <rect x={x + width - 78} y={y + 28} width={46} height={62} rx={4} fill={isDark ? "#44403c" : "#e7e5e4"} stroke="#d6d3d1" />
-        {[0, 1, 2].map((row) => (
-          <line key={row} x1={x + width - 70} y1={y + 44 + row * 14} x2={x + width - 40} y2={y + 44 + row * 14} stroke="#a8a29e" />
-        ))}
-      </g>
-      <Plant x={x + width / 2 - 20} y={y + 58} />
-      <Plant x={x + 250} y={y + 62} />
+      <rect x={x + piece(16)} y={top + piece(10)} width={piece(64)} height={piece(18)} rx={piece(4)} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + piece(28)} y={top + piece(4)} width={piece(36)} height={piece(20)} rx={piece(4)} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + piece(86)} y={top + piece(22)} width={piece(28)} height={piece(16)} rx={2} fill={table} />
+      <circle cx={x + piece(128)} cy={top + piece(12)} r={px(5)} fill="#F2C14E" stroke="#C99A2E" strokeWidth={px(1)} />
+      <rect x={x + piece(140)} y={top + piece(18)} width={piece(40)} height={piece(12)} rx={2} fill={shelf} />
+      {[0, 1, 2].map((index) => (
+        <line
+          key={index}
+          x1={x + piece(142)}
+          y1={top + piece(21) + index * piece(3.2)}
+          x2={x + piece(178)}
+          y2={top + piece(21) + index * piece(3.2)}
+          stroke={shelfLine}
+          strokeWidth={px(1)}
+        />
+      ))}
+      <rect x={mid} y={top + height * 0.28} width={piece(34)} height={piece(14)} rx={2} fill={table} />
+      <rect x={mid + piece(3)} y={top + height * 0.52} width={piece(10)} height={piece(12)} rx={2} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={mid + piece(20)} y={top + height * 0.52} width={piece(10)} height={piece(12)} rx={2} fill={sofa} stroke={sofaEdge} strokeWidth={px(1)} />
+      <rect x={x + width - piece(210)} y={top + height * 0.3} width={piece(96)} height={piece(18)} rx={4} fill={table} />
+      <rect x={x + width - piece(196)} y={top + height * 0.12} width={piece(18)} height={piece(14)} rx={2} fill={isDark ? "#6B5438" : "#F4F1EC"} stroke={sofaEdge} strokeWidth={px(1)} />
+      <CoffeeCup x={x + width - piece(150)} y={top + height * 0.42} />
+      <rect
+        x={x + width - piece(72)}
+        y={top + piece(8)}
+        width={piece(28)}
+        height={height - piece(20)}
+        rx={3}
+        fill={isDark ? "#6B5438" : "#E7E5E4"}
+        stroke={isDark ? "#CDBBA2" : "#CDBBA2"}
+      />
+      <Plant x={x + piece(196)} y={top + height - piece(16)} />
     </g>
   );
 }

@@ -2,7 +2,7 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
+import { linkAppearance, staticOffice, svgToWorld, WORLD_WIDTH } from "@/data/layout-office";
 import { handoffPoints, occupiedFloor } from "./walkways";
 import { useOfficeStore } from "@/store/office-store";
 import { AgentCharacter } from "./AgentCharacter";
@@ -41,12 +41,19 @@ function FlowRibbon({
   color,
   opacity,
   width,
+  dashed,
+  hot,
 }: {
   points: Array<[number, number, number]>;
   color: string;
   opacity: number;
   width: number;
+  dashed?: boolean;
+  hot?: boolean;
 }) {
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  const angle = prev && last ? Math.atan2(last[0] - prev[0], last[2] - prev[2]) : 0;
   return (
     <group>
       {points.slice(0, -1).map((start, index) => {
@@ -55,17 +62,33 @@ function FlowRibbon({
         const dz = end[2] - start[2];
         const len = Math.hypot(dx, dz);
         if (len < 0.04) return null;
+        const pieces = dashed ? Math.max(1, Math.round(len / 0.28)) : 1;
         return (
-          <mesh
-            key={index}
-            position={[(start[0] + end[0]) / 2, 0.05, (start[2] + end[2]) / 2]}
-            rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]}
-          >
-            <planeGeometry args={[len, width]} />
-            <meshLambertMaterial color={color} transparent opacity={opacity} depthWrite={false} />
-          </mesh>
+          <group key={index}>
+            {Array.from({ length: pieces }, (_, piece) => {
+              if (dashed && piece % 2 === 1) return null;
+              const span = len / pieces;
+              const along = (piece + 0.5) * span;
+              return (
+                <mesh
+                  key={piece}
+                  position={[start[0] + (dx / len) * along, 0.05, start[2] + (dz / len) * along]}
+                  rotation={[-Math.PI / 2, 0, -Math.atan2(dz, dx)]}
+                >
+                  <planeGeometry args={[dashed ? span * 0.62 : len, width]} />
+                  <meshLambertMaterial color={color} transparent opacity={opacity} depthWrite={false} />
+                </mesh>
+              );
+            })}
+          </group>
         );
       })}
+      {hot && last && (
+        <mesh position={[last[0], 0.06, last[2]]} rotation={[-Math.PI / 2, 0, -angle]}>
+          <coneGeometry args={[width * 1.4, width * 2.4, 3]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -83,19 +106,19 @@ function CollabLines() {
       if (!source || !target) return [];
       const points = flowPoints(link.sourceId, link.targetId);
       if (points.length < 2) return [];
+      const look = linkAppearance(link);
       const hot =
         (activeHandoff?.sourceId === link.sourceId && activeHandoff.targetId === link.targetId) ||
         selectedAgentId === link.sourceId ||
         selectedAgentId === link.targetId;
-      const tip = points[Math.max(0, points.length - 2)];
       return [{
         key: `${link.pipeline ?? "article"}-${link.sourceId}-${link.targetId}-${link.kind ?? "flow"}`,
         points,
-        color: hot ? "#7C3AED" : "#A78BFA",
-        opacity: hot ? 1 : 0.6,
-        width: hot ? 0.16 : 0.07,
-        dashed: link.kind === "return",
-        tip,
+        color: look.color,
+        opacity: hot ? 1 : 0.35,
+        width: hot ? 0.14 : 0.065,
+        dashed: look.dashed,
+        hot,
       }];
     });
   }, [agents, links, selectedAgentId, activeHandoff]);
@@ -104,7 +127,7 @@ function CollabLines() {
     <group>
       {curves.map((curve) => (
         <group key={curve.key}>
-          <FlowRibbon points={curve.points} color={curve.color} opacity={curve.opacity} width={curve.width} />
+          <FlowRibbon points={curve.points} color={curve.color} opacity={curve.opacity} width={curve.width} dashed={curve.dashed} hot={curve.hot} />
         </group>
       ))}
     </group>

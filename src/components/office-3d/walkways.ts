@@ -1,3 +1,4 @@
+import { routeCenter, walkOutAndBack } from "@/data/corridors";
 import { staticOffice, svgToWorld, type PlacedZone } from "@/data/layout-office";
 
 export interface Pt {
@@ -115,29 +116,23 @@ export function nearestRing(point: Pt, ring = ringPoints()): Pt {
 }
 
 export function walkSegments(): WalkSegment[] {
-  const ring = ringPoints();
   const segments: WalkSegment[] = [];
-  const lane = 78;
-  for (let i = 0; i < ring.length; i++) {
-    segments.push({ a: ring[i], b: ring[(i + 1) % ring.length], width: lane });
+  for (const band of layout.corridors.horizontals) {
+    const y = band.y + band.height / 2;
+    segments.push({ a: { x: band.x, y }, b: { x: band.x + band.width, y }, width: band.height });
   }
-  for (const zone of layout.zones) {
-    if (zone.id === "command") continue;
-    const stand = standPoint(zone);
-    const door = boundaryToward(zone, commandCenter());
-    const gate = nearestRing(door, ring);
-    segments.push({ a: stand, b: door, width: 54 });
-    segments.push({ a: door, b: gate, width: lane });
+  const spine = layout.corridors.vertical;
+  if (spine) {
+    const x = spine.x + spine.width / 2;
+    segments.push({ a: { x, y: spine.y }, b: { x, y: spine.y + spine.height }, width: spine.width });
   }
   return segments;
 }
 
-/** Seat → door → ring, then back. Stays on the zone approach plus the ring. */
+/** Seat → door → spine, then back along the same corridor. */
 export function shortWalk(home: Pt, zone: PlacedZone | undefined): Pt[] {
   if (!zone) return [home, home];
-  const door = boundaryToward(zone, commandCenter());
-  const gate = nearestRing(door);
-  return [home, door, gate, door, { ...home }];
+  return walkOutAndBack(layout, home, zone);
 }
 
 export function zoneByAgent(agentId: string): PlacedZone | undefined {
@@ -145,29 +140,7 @@ export function zoneByAgent(agentId: string): PlacedZone | undefined {
   return layout.zones.find((zone) => zone.id === seat?.zoneId);
 }
 
-/** Handoff line follows the walkway: stand, door, ring arc, door, stand. */
+/** Handoff line follows the corridor: desk, door, hall, door, desk. */
 export function handoffPoints(sourceId: string, targetId: string): Pt[] {
-  const sourceZone = zoneByAgent(sourceId);
-  const targetZone = zoneByAgent(targetId);
-  const ring = ringPoints();
-  if (!sourceZone || !targetZone) return [];
-  const source = standPoint(sourceZone);
-  const target = standPoint(targetZone);
-  const sourceDoor = boundaryToward(sourceZone, commandCenter());
-  const targetDoor = boundaryToward(targetZone, commandCenter());
-  const sourceGate = nearestRing(sourceDoor, ring);
-  const targetGate = nearestRing(targetDoor, ring);
-  const start = ring.findIndex((point) => point === sourceGate);
-  const end = ring.findIndex((point) => point === targetGate);
-  const arc: Pt[] = [];
-  if (start >= 0 && end >= 0) {
-    const forward = (end - start + ring.length) % ring.length;
-    const backward = (start - end + ring.length) % ring.length;
-    const step = forward <= backward ? 1 : -1;
-    const count = Math.min(forward, backward);
-    for (let i = 0; i <= count; i++) {
-      arc.push(ring[(start + step * i + ring.length) % ring.length]);
-    }
-  }
-  return [source, sourceDoor, ...arc, targetDoor, target];
+  return routeCenter(layout, sourceId, targetId);
 }
