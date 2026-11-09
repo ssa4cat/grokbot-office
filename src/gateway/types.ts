@@ -133,6 +133,9 @@ export interface MovementState {
   startTime: number;
   fromZone: AgentZone;
   toZone: AgentZone;
+  /** Segment already entered. A new corner holds progress until the body turns. */
+  segmentIndex?: number;
+  holdUntil?: number;
 }
 
 export interface VisualAgent {

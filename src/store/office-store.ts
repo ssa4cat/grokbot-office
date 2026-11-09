@@ -29,11 +29,47 @@ import {
   planWalkPath,
   calculateWalkDuration,
   interpolatePathPosition,
+  pathLength,
 } from "@/lib/movement-animator";
 import { applyEventToAgent } from "./agent-reducer";
 import { applyMeetingGathering, detectMeetingGroups } from "./meeting-manager";
 import { computeMetrics } from "./metrics-reducer";
 import { staticOffice } from "@/data/layout-office";
+
+function headingOf(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.atan2(b.x - a.x, b.y - a.y);
+}
+
+function wrapAngle(turn: number): number {
+  let value = turn;
+  while (value > Math.PI) value -= Math.PI * 2;
+  while (value < -Math.PI) value += Math.PI * 2;
+  return value;
+}
+
+function segmentIndexAt(path: Array<{ x: number; y: number }>, progress: number): number {
+  if (path.length < 2) return 0;
+  const total = pathLength(path);
+  if (total <= 0) return 1;
+  const target = Math.min(1, Math.max(0, progress)) * total;
+  let walked = 0;
+  for (let index = 1; index < path.length; index++) {
+    const length = Math.hypot(path[index].x - path[index - 1].x, path[index].y - path[index - 1].y);
+    if (walked + length >= target - 0.01) return index;
+    walked += length;
+  }
+  return path.length - 1;
+}
+
+function progressAtCorner(path: Array<{ x: number; y: number }>, index: number): number {
+  const total = pathLength(path);
+  if (total <= 0) return 0;
+  let walked = 0;
+  for (let step = 1; step < index; step++) {
+    walked += Math.hypot(path[step].x - path[step - 1].x, path[step].y - path[step - 1].y);
+  }
+  return walked / total;
+}
 
 const seededAgents = new Map(staticOffice.agents.map((agent) => [agent.id, agent]));
 const seededMetrics = computeMetrics(seededAgents, {
@@ -537,15 +573,40 @@ export const useOfficeStore = create<OfficeStore>()(
       set((state) => {
         const agent = state.agents.get(agentId);
         if (!agent?.movement) return;
+        const motion = agent.movement;
+        const reduced =
+          typeof window !== "undefined" &&
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const index = segmentIndexAt(motion.path, motion.progress);
+        if (motion.segmentIndex === undefined) motion.segmentIndex = index;
+        if (!reduced && index > (motion.segmentIndex ?? index) && index >= 1 && motion.path[index - 2]) {
+          const incoming = headingOf(motion.path[index - 2], motion.path[index - 1]);
+          const outgoing = headingOf(motion.path[index - 1], motion.path[index]);
+          motion.segmentIndex = index;
+          if (Math.abs(wrapAngle(outgoing - incoming)) > 0.45) {
+            motion.progress = progressAtCorner(motion.path, index);
+            motion.holdUntil = Date.now() + 280;
+            agent.position = { ...motion.path[index - 1] };
+            return;
+          }
+        } else if (index !== motion.segmentIndex) {
+          motion.segmentIndex = index;
+        }
+        if (motion.holdUntil && Date.now() < motion.holdUntil) {
+          const corner = motion.path[Math.max(0, (motion.segmentIndex ?? 1) - 1)];
+          if (corner) agent.position = { ...corner };
+          return;
+        }
+        motion.holdUntil = undefined;
 
-        const progressDelta = deltaTime / agent.movement.duration;
-        agent.movement.progress = Math.min(agent.movement.progress + progressDelta, 1);
-        const pos = interpolatePathPosition(agent.movement.path, agent.movement.progress);
-        agent.position = pos;
+        const progressDelta = deltaTime / motion.duration;
+        motion.progress = Math.min(motion.progress + progressDelta, 1);
+        agent.position = interpolatePathPosition(motion.path, motion.progress);
 
-        if (agent.movement.progress >= 1) {
-          const finalZone = agent.movement.toZone;
-          const finalPos = agent.movement.path[agent.movement.path.length - 1];
+        if (motion.progress >= 1) {
+          const finalZone = motion.toZone;
+          const finalPos = motion.path[motion.path.length - 1];
           agent.movement = null;
           agent.zone = finalZone;
           agent.position = { ...finalPos };
